@@ -10,7 +10,7 @@
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-3xl p-6 bg-gray-800 rounded-2xl shadow-2xl">
     <h1 class="text-3xl font-bold mb-4 text-center">📺 Stream Player</h1>
-    <p class="text-sm text-gray-400 mb-6 text-center">Supports .m3u8, .mp4, and .txt playlist links</p>
+    <p class="text-sm text-gray-400 mb-6 text-center">Supports .m3u8, .mp4, and .txt playlist links (auto-CORS)</p>
 
     <div class="flex gap-2 mb-4">
       <input
@@ -33,6 +33,8 @@
   </div>
 
   <script>
+    const corsProxy = "https://cors-proxy.elfsight.com/";
+
     async function loadStream() {
       const input = document.getElementById("streamUrl");
       const video = document.getElementById("video");
@@ -45,7 +47,7 @@
         return;
       }
 
-      // Reset player
+      // Reset video
       video.pause();
       video.removeAttribute("src");
       video.load();
@@ -56,47 +58,50 @@
 
       let finalUrl = url;
 
-      // Check for .txt file
-      const isTxt = /\.txt(\?.*)?$/i.test(url);
-      if (isTxt) {
-        try {
-          const res = await fetch(url);
+      try {
+        // If it's a .txt playlist
+        if (/\.txt(\?.*)?$/i.test(url)) {
+          const res = await fetch(corsProxy + url);
           const text = await res.text();
           const lines = text
             .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(line => line && !line.startsWith("#"));
+            .map(l => l.trim())
+            .filter(l => l && l.startsWith("http"));
 
-          const validLine = lines.find(line =>
-            /^https?:\/\/.+/i.test(line)
-          );
-
-          if (!validLine) {
-            status.textContent = "No playable stream found in the file.";
+          if (!lines.length) {
+            status.textContent = "No valid stream found in the .txt file.";
             return;
           }
 
-          finalUrl = validLine;
-        } catch (err) {
-          console.error("Error loading .txt file:", err);
-          status.textContent = "Could not load or parse the .txt file.";
-          return;
+          finalUrl = lines[0];
         }
-      }
 
-      // Try HLS first
+        // Add CORS proxy if needed
+        if (!finalUrl.includes("cors-proxy")) {
+          finalUrl = corsProxy + finalUrl;
+        }
+
+        loadVideo(finalUrl);
+      } catch (err) {
+        console.error(err);
+        status.textContent = "Error loading the stream. Check the URL or try again.";
+      }
+    }
+
+    function loadVideo(finalUrl) {
+      const video = document.getElementById("video");
+      const status = document.getElementById("status");
+
       if (Hls.isSupported() && finalUrl.includes(".m3u8")) {
         const hls = new Hls();
         hls.loadSource(finalUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
-          video.play().catch(err => {
-            console.error("Autoplay blocked:", err);
-            status.textContent = "Click the play button on the video.";
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(() => {
+            status.textContent = "Click the play button to start.";
           });
         });
-        hls.on(Hls.Events.ERROR, function (_, data) {
-          console.error("HLS error:", data);
+        hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
             hls.destroy();
             tryNative(video, finalUrl, status);
@@ -110,9 +115,8 @@
 
     function tryNative(video, url, status) {
       video.src = url;
-      video.play().catch(err => {
-        console.error("Native error:", err);
-        status.textContent = "Could not play the stream. Check the link or CORS settings.";
+      video.play().catch(() => {
+        status.textContent = "Could not play the stream (CORS or format issue).";
       });
     }
   </script>

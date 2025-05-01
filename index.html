@@ -42,25 +42,47 @@
 <body>
 
   <h2>Network Stream Player</h2>
-  <input type="text" id="streamUrl" placeholder="Paste your .m3u8 or .mp4 URL here" />
+  <input type="text" id="streamUrl" placeholder="Paste .m3u8, .mp4 or .txt URL" />
   <button onclick="playStream()">Play</button>
 
   <video id="videoPlayer" controls></video>
 
   <script>
-    function playStream() {
+    async function playStream() {
       const video = document.getElementById('videoPlayer');
-      const url = document.getElementById('streamUrl').value.trim();
+      const inputUrl = document.getElementById('streamUrl').value.trim();
 
-      if (Hls.isSupported() && url.endsWith('.m3u8')) {
+      // Handle .txt files by fetching and extracting the first streamable link
+      let finalUrl = inputUrl;
+
+      if (inputUrl.endsWith('.txt')) {
+        try {
+          const response = await fetch(inputUrl);
+          const text = await response.text();
+          const lines = text.split(/\r?\n/);
+          const streamUrl = lines.find(line => line.includes('.m3u8') || line.includes('.mp4'));
+          if (streamUrl) {
+            finalUrl = streamUrl.trim();
+          } else {
+            alert('No valid stream URL found in the .txt file.');
+            return;
+          }
+        } catch (err) {
+          alert('Failed to fetch or parse .txt file.');
+          return;
+        }
+      }
+
+      // Play .m3u8 using hls.js if supported
+      if (Hls.isSupported() && finalUrl.endsWith('.m3u8')) {
         const hls = new Hls();
-        hls.loadSource(url);
+        hls.loadSource(finalUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
           video.play();
         });
       } else {
-        video.src = url;
+        video.src = finalUrl;
         video.load();
         video.play();
       }

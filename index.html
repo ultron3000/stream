@@ -10,7 +10,7 @@
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-3xl p-6 bg-gray-800 rounded-2xl shadow-2xl">
     <h1 class="text-3xl font-bold mb-4 text-center">📺 Stream Player</h1>
-    <p class="text-sm text-gray-400 mb-6 text-center">Paste a valid video stream URL (.m3u8 or .mp4) below</p>
+    <p class="text-sm text-gray-400 mb-6 text-center">Paste a valid video stream URL below (e.g. .m3u8, .mp4, .txt pointing to HLS)</p>
 
     <div class="flex gap-2 mb-4">
       <input
@@ -35,20 +35,33 @@
       const url = document.getElementById('streamUrl').value.trim();
       const video = document.getElementById('video');
 
-      if (!url) return alert('Please enter a valid stream URL');
+      if (!url) return alert('Please enter a stream URL');
 
-      if (Hls.isSupported() && url.endsWith('.m3u8')) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      // Reset source and HLS if needed
+      video.pause();
+      video.src = '';
+      if (window.hls) {
+        window.hls.destroy();
+        window.hls = null;
+      }
+
+      // Always try to use HLS.js if supported
+      if (Hls.isSupported()) {
+        window.hls = new Hls();
+        window.hls.loadSource(url);
+        window.hls.attachMedia(video);
+        window.hls.on(Hls.Events.MANIFEST_PARSED, function () {
           video.play();
+        });
+        window.hls.on(Hls.Events.ERROR, function (event, data) {
+          console.error("HLS.js error:", data);
+          alert("Could not play the stream. Check the link.");
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl') || url.endsWith('.mp4') || url.endsWith('.webm')) {
         video.src = url;
         video.play();
       } else {
-        alert('Unsupported video format or link.');
+        alert('This browser does not support the video format or stream type.');
       }
     }
   </script>

@@ -1,5 +1,6 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 const cors = require('cors');
 
 const app = express();
@@ -10,22 +11,20 @@ app.get('/extract', async (req, res) => {
   if (!targetUrl) return res.status(400).send('Missing ?url=');
 
   const browser = await puppeteer.launch({
-    headless: false, // Use headless: 'new' or false to appear real
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-blink-features=AutomationControlled'
-    ]
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
   });
 
   const page = await browser.newPage();
 
-  // Make it look like a regular browser
-  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36");
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+  );
 
   const videoLinks = new Set();
 
-  // Capture all network requests for .mp4 or .m3u8 files
   page.on('request', req => {
     const url = req.url();
     if (url.match(/\\.m3u8|\\.mp4|\\.m4v/i)) {
@@ -35,7 +34,7 @@ app.get('/extract', async (req, res) => {
 
   try {
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    await page.waitForTimeout(5000); // wait for any delayed streams to load
+    await page.waitForTimeout(5000);
     await browser.close();
     res.json([...videoLinks]);
   } catch (err) {

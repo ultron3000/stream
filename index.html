@@ -1,19 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HD Streamz Loader</title>
+  <meta charset="UTF-8">
+  <title>Smart Stream Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     body {
-      background: #111;
+      background: black;
       color: #ffcc00;
-      font-family: Arial;
+      font-family: Arial, sans-serif;
       text-align: center;
-      padding: 40px;
+      margin: 0;
+      padding: 20px;
     }
+    h1 { margin-bottom: 20px; font-size: 2em; }
     input, button {
-      padding: 12px;
+      padding: 10px;
       font-size: 1em;
       margin: 10px;
       border-radius: 6px;
@@ -28,39 +31,165 @@
       color: black;
       cursor: pointer;
     }
+    video {
+      width: 90%;
+      max-width: 1000px;
+      border: 3px solid #ffcc00;
+      border-radius: 15px;
+      background: #000;
+      margin-top: 20px;
+    }
+    #loading-spinner {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 60px;
+      height: 60px;
+      margin: -30px 0 0 -30px;
+      border: 8px solid #f3f3f3;
+      border-top: 8px solid #ffcc00;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      z-index: 999;
+    }
+    #loading-text {
+      display: none;
+      position: fixed;
+      top: 60%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    .caption-button {
+      margin-top: 10px;
+      background: #ffcc00;
+      color: black;
+      border: none;
+      padding: 8px 16px;
+      font-size: 1em;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
 
-<h1>🔗 Load Stream</h1>
-<input id="streamInput" type="text" placeholder="Paste .txt or stream URL here">
+<div id="loading-spinner"></div>
+<div id="loading-text">Loading video...</div>
+
+<h1>📺 Smart Stream Player</h1>
+
+<input id="streamInput" type="text" placeholder="Paste .m3u8 / .mp4 / .txt link here">
+<button onclick="loadStream()">▶️ Play</button>
+
+<video id="video" controls autoplay crossorigin="anonymous"></video>
 <br>
-<button onclick="handleStream()">Play</button>
+<button class="caption-button" id="toggle-captions">Toggle Subtitles</button>
 
 <script>
-  async function handleStream() {
-    const input = document.getElementById("streamInput").value.trim();
-    if (!input) return alert("Please enter a stream URL");
+const video = document.getElementById('video');
+const spinner = document.getElementById('loading-spinner');
+const loadingText = document.getElementById('loading-text');
+const toggleBtn = document.getElementById('toggle-captions');
 
-    let finalUrl = input;
+function showSpinner() {
+  spinner.style.display = "block";
+  loadingText.style.display = "block";
+}
+function hideSpinner() {
+  spinner.style.display = "none";
+  loadingText.style.display = "none";
+}
 
-    if (input.endsWith(".txt") || input.includes(".txt?")) {
-      try {
-        const res = await fetch(input);
-        const text = await res.text();
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
-        const valid = lines.find(line => line.includes(".m3u8") || line.includes(".mp4"));
-        if (!valid) return alert("No playable stream found in the .txt file");
-        finalUrl = valid;
-      } catch (err) {
-        console.error("Failed to load .txt file", err);
-        return alert("Could not load the .txt file.");
+async function loadStream() {
+  const input = document.getElementById('streamInput').value.trim();
+  if (!input) return alert("Please enter a video or playlist link.");
+
+  showSpinner();
+  let finalUrl = input;
+
+  // .txt playlist support
+  if (input.endsWith(".txt") || input.includes(".txt?")) {
+    try {
+      const response = await fetch(input);
+      const text = await response.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
+      const stream = lines.find(l => l.includes(".m3u8") || l.includes(".mp4") || l.includes(".webm"));
+      if (!stream) {
+        hideSpinner();
+        return alert("No valid stream found in the file.");
       }
+      finalUrl = stream;
+    } catch (err) {
+      hideSpinner();
+      console.error("Failed to fetch .txt:", err);
+      return alert("Could not load or parse the .txt file.");
     }
-
-    // Redirect to your existing Ironman.html
-    window.location.href = `Ironman.html?title=Stream&video=${encodeURIComponent(finalUrl)}`;
   }
+
+  playStream(finalUrl);
+}
+
+function playStream(url) {
+  const saveKey = `resume-${url}`;
+
+  if (window.hls) {
+    window.hls.destroy();
+    window.hls = null;
+  }
+
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+
+  if (Hls.isSupported() && url.includes(".m3u8")) {
+    const hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hideSpinner();
+      const lastTime = localStorage.getItem(saveKey);
+      if (lastTime) video.currentTime = parseFloat(lastTime);
+      video.play();
+    });
+    window.hls = hls;
+  } else {
+    video.src = url;
+    video.addEventListener("loadedmetadata", () => {
+      hideSpinner();
+      const lastTime = localStorage.getItem(saveKey);
+      if (lastTime) video.currentTime = parseFloat(lastTime);
+      video.play();
+    });
+  }
+
+  setInterval(() => {
+    if (!isNaN(video.currentTime)) {
+      localStorage.setItem(saveKey, video.currentTime);
+    }
+  }, 5000);
+}
+
+toggleBtn.addEventListener("click", () => {
+  for (const track of video.textTracks) {
+    track.mode = track.mode === "showing" ? "hidden" : "showing";
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.code === "ArrowRight") video.currentTime += 10;
+  else if (e.code === "ArrowLeft") video.currentTime -= 10;
+  else if (e.code === "Space") {
+    e.preventDefault();
+    video.paused ? video.play() : video.pause();
+  }
+});
 </script>
 
 </body>

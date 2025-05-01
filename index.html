@@ -50,7 +50,6 @@
       let finalUrl = url;
 
       try {
-        // Check if it's a .txt or .txt?something file
         const isTxt = /\.txt(\?.*)?$/.test(url);
 
         if (isTxt) {
@@ -62,7 +61,9 @@
             .map(line => line.trim())
             .filter(line => line && !line.startsWith('#'));
 
-          const validLine = lines.find(line => line.includes('.m3u8') || line.includes('.mp4') || line.startsWith('http'));
+          const validLine = lines.find(line =>
+            /\.m3u8|\.mp4/i.test(line) || line.startsWith('http')
+          );
 
           if (!validLine) {
             alert('No playable stream found in the file.');
@@ -72,25 +73,24 @@
           finalUrl = validLine.startsWith('http') ? validLine : new URL(validLine, url).href;
         }
 
-        console.log('Trying to play stream:', finalUrl);
-        loadToPlayer(finalUrl);
+        playStream(finalUrl);
       } catch (err) {
-        console.error('Failed to load or parse file:', err);
-        alert('Could not parse the file or retrieve the stream URL.');
+        console.error('Error loading stream:', err);
+        alert('Could not parse or load the stream URL.');
       }
     }
 
-    function loadToPlayer(sourceUrl) {
+    function playStream(sourceUrl) {
       const video = document.getElementById('video');
 
-      if (Hls.isSupported() && sourceUrl.includes('.m3u8')) {
+      if (/\.m3u8$/i.test(sourceUrl) && Hls.isSupported()) {
         const hls = new Hls();
         hls.loadSource(sourceUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
           video.play();
         });
-        hls.on(Hls.Events.ERROR, (event, data) => {
+        hls.on(Hls.Events.ERROR, function (event, data) {
           console.error('HLS.js error:', data);
           if (data.fatal) {
             hls.destroy();
@@ -106,9 +106,12 @@
     function tryNativePlayback(url) {
       const video = document.getElementById('video');
       video.src = url;
+      video.addEventListener('error', () => {
+        alert('Could not play the stream. Please check the link.');
+      });
       video.play().catch(err => {
         console.error('Native playback failed:', err);
-        alert('Could not play the stream. Please check the link.');
+        alert('Could not play the stream.');
       });
     }
   </script>

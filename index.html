@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Network Stream Player</title>
+  <title>Network Stream Player + Link Extractor</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     body {
@@ -39,6 +39,9 @@
       border: 3px solid #ffcc00;
       border-radius: 15px;
     }
+    #links { margin-top: 20px; }
+    .link-item { margin: 10px 0; }
+    .link-item button { margin-left: 10px; }
   </style>
 </head>
 <body>
@@ -47,68 +50,83 @@
   <input type="text" id="streamUrl" placeholder="Paste stream link (.txt, .m3u8, .mp4)" />
   <button onclick="playStream()">Play</button>
 
+  <br><br>
+
+  <input type="text" id="pageUrl" placeholder="Paste webpage URL to extract video links" />
+  <button onclick="extractLinks()">Extract</button>
+
   <video id="videoPlayer" controls autoplay crossorigin="anonymous"></video>
 
-  <script>
-    function playStream() {
-      const video = document.getElementById('videoPlayer');
-      const url = document.getElementById('streamUrl').value.trim();
+  <div id="links"></div>
 
-      // Reset previous playback
+  <script>
+    function playStream(urlInputId = 'streamUrl') {
+      const video = document.getElementById('videoPlayer');
+      const url = document.getElementById(urlInputId).value.trim();
+
       video.pause();
       video.removeAttribute('src');
       video.load();
 
       if (Hls.isSupported()) {
         const hls = new Hls();
-
-        // Event: HLS.js manifest parsing
-        hls.on(Hls.Events.MANIFEST_LOADING, function(event, data) {
-          console.log("HLS.js: Manifest is loading from URL:", data.url);
-        });
-
-        // Event: HLS.js manifest loaded successfully
-        hls.on(Hls.Events.MANIFEST_PARSED, function() {
-          console.log("HLS.js: Manifest parsed and ready for playback.");
-          video.play();
-        });
-
-        // Detailed error handling
-        hls.on(Hls.Events.ERROR, function(event, data) {
-          console.error("HLS.js Error Event:", event, data);
-          if (data.fatal) {
-            if (data.type === Hls.ErrorTypes.MANIFEST_LOAD_ERROR) {
-              console.error("Manifest Load Error: " + data.details);
-              alert("HLS playback error: Manifest load error. Check the URL.");
-            } else if (data.type === Hls.ErrorTypes.BUFFER_APPENDING_ERROR) {
-              console.error("Buffer Append Error: " + data.details);
-              alert("HLS playback error: Buffer append error. Likely an issue with stream segments.");
-            } else {
-              console.error("Other HLS Error: " + data.details);
-            }
-          }
-        });
-
-        // Load and attach the stream URL directly
-        console.log("HLS.js: Loading source:", url);
-        hls.loadSource(url); // Directly pass URL
+        hls.loadSource(url);
         hls.attachMedia(video);
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native browser support for HLS (Apple devices)
-        console.log("Native HLS support: Playing", url);
-        video.src = url;
-        video.addEventListener("loadedmetadata", () => {
-          video.play();
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        hls.on(Hls.Events.ERROR, function (event, data) {
+          if (data.fatal) alert("HLS playback error: " + data.details);
         });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url;
+        video.addEventListener("loadedmetadata", () => video.play());
       } else {
-        // Fallback for .mp4 streams
-        console.log("Fallback: Playing .mp4 directly:", url);
         video.src = url;
         video.load();
         video.play();
       }
     }
-  </script>
 
+    async function extractLinks() {
+      const pageUrl = document.getElementById('pageUrl').value.trim();
+      const linksContainer = document.getElementById('links');
+      linksContainer.innerHTML = '<p style="color:white">Loading...</p>';
+
+      try {
+        const response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`);
+        const html = await response.text();
+        const matches = [...html.matchAll(/https?:[^\"'\s>]+\.(m3u8|mp4)/gi)];
+
+        if (matches.length === 0) {
+          linksContainer.innerHTML = '<p style="color:red">No video links found.</p>';
+          return;
+        }
+
+        linksContainer.innerHTML = '<h3>Found Links:</h3>';
+        matches.forEach((match, index) => {
+          const link = match[0];
+          const id = `foundLink${index}`;
+          linksContainer.innerHTML += `
+            <div class="link-item">
+              <input type="text" id="${id}" value="${link}" readonly size="60">
+              <button onclick="copyToClipboard('${id}')">Copy</button>
+              <button onclick="document.getElementById('streamUrl').value='${link}'; playStream();">Play</button>
+            </div>
+          `;
+        });
+      } catch (err) {
+        linksContainer.innerHTML = '<p style="color:red">Failed to extract links. Page may block access.</p>';
+        console.error(err);
+      }
+    }
+
+    function copyToClipboard(id) {
+      const input = document.getElementById(id);
+      input.select();
+      input.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(input.value).then(() => {
+        alert("Copied to clipboard");
+      });
+    }
+  </script>
 </body>
 </html>

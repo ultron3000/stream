@@ -61,23 +61,40 @@
 
       if (Hls.isSupported()) {
         const hls = new Hls();
-        hls.loadSource(url); // Directly pass URL, even if it's .txt
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+
+        // Event: HLS.js manifest parsing
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+          console.log("Manifest parsed and ready for playback.");
           video.play();
         });
-        hls.on(Hls.Events.ERROR, function (event, data) {
+
+        // Error Handling (specific errors)
+        hls.on(Hls.Events.ERROR, function(event, data) {
           if (data.fatal) {
-            alert("HLS playback error: " + data.details);
+            if (data.type === Hls.ErrorTypes.MANIFEST_LOAD_ERROR) {
+              console.error("Manifest Load Error: " + data.details);
+              alert("HLS playback error: Manifest load error. Check the URL.");
+            } else if (data.type === Hls.ErrorTypes.BUFFER_APPENDING_ERROR) {
+              console.error("Buffer Append Error: " + data.details);
+              alert("HLS playback error: Buffer append error. Likely an issue with stream segments.");
+            } else {
+              console.error("Other HLS Error: " + data.details);
+            }
           }
         });
+
+        // Load and attach the stream URL directly
+        hls.loadSource(url); // Directly pass URL, even if it's .txt
+        hls.attachMedia(video);
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native browser support for HLS (Apple devices)
         video.src = url;
         video.addEventListener("loadedmetadata", () => {
           video.play();
         });
       } else {
-        video.src = url; // Fallback for .mp4
+        // Fallback for .mp4 streams
+        video.src = url;
         video.load();
         video.play();
       }

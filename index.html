@@ -124,8 +124,11 @@ async function loadStream() {
         .map(l => l.trim())
         .filter(l => l && !l.startsWith("#"));
 
+      // Accept anything that looks like a URL or path to video
       const stream = lines.find(line =>
-        /\.(m3u8|mp4|webm)(\?.*)?$/.test(line)
+        line.startsWith("http") ||
+        line.startsWith("/") ||
+        /\.(m3u8|mp4|webm|php|asp|aspx|mov|flv|ts)(\?.*)?$/i.test(line)
       );
 
       if (!stream) {

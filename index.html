@@ -1,75 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Global Smart Stream Player</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Network Stream Player</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
-    body { background: black; color: #ffcc00; font-family: Arial; text-align: center; padding: 20px; }
-    input, button { padding: 10px; font-size: 1em; margin: 10px; border-radius: 6px; border: none; }
-    input { width: 70%; max-width: 600px; }
-    button { background: #ffcc00; color: black; cursor: pointer; }
-    video { width: 90%; max-width: 1000px; border: 3px solid #ffcc00; border-radius: 15px; background: #000; margin-top: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #121212;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    input {
+      width: 60%;
+      padding: 10px;
+      font-size: 1rem;
+      border-radius: 5px;
+      border: none;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin-left: 10px;
+      border-radius: 5px;
+      border: none;
+      background-color: #1e88e5;
+      color: white;
+      cursor: pointer;
+    }
+    video {
+      margin-top: 20px;
+      width: 100%;
+      max-width: 800px;
+      height: auto;
+      background: black;
+    }
   </style>
 </head>
 <body>
 
-<h1>📺 Smart Stream Player (Online)</h1>
-<input id="streamInput" type="text" placeholder="Paste .txt / .m3u8 / .mp4 link here">
-<button onclick="loadStream()">▶️ Play</button>
+  <h2>Network Stream Player</h2>
+  <input type="text" id="streamUrl" placeholder="Paste your .m3u8 or .mp4 URL here" />
+  <button onclick="playStream()">Play</button>
 
-<video id="video" controls autoplay crossorigin="anonymous"></video>
+  <video id="videoPlayer" controls></video>
 
-<script>
-  const video = document.getElementById("video");
-  const proxyBase = "https://api.allorigins.win/raw?url=";
+  <script>
+    function playStream() {
+      const video = document.getElementById('videoPlayer');
+      const url = document.getElementById('streamUrl').value.trim();
 
-  async function loadStream() {
-    const input = document.getElementById("streamInput").value.trim();
-    if (!input) return alert("Please enter a link.");
-
-    let finalUrl = input;
-
-    if (input.endsWith(".txt") || input.includes(".txt?")) {
-      try {
-        const response = await fetch(proxyBase + encodeURIComponent(input));
-        const text = await response.text();
-        const base = new URL(input);
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
-        const stream = lines.find(l => l.startsWith("http") || l.startsWith("/") || l.includes(".m3u8") || l.includes(".mp4"));
-        if (!stream) return alert("No valid stream found in .txt");
-        finalUrl = stream.startsWith("http") ? stream : new URL(stream, base).href;
-      } catch (e) {
-        return alert("Error loading .txt file. CORS or network blocked.");
+      if (Hls.isSupported() && url.endsWith('.m3u8')) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+          video.play();
+        });
+      } else {
+        video.src = url;
+        video.load();
+        video.play();
       }
     }
-
-    playStream(finalUrl);
-  }
-
-  function playStream(url) {
-    if (window.hls) {
-      window.hls.destroy();
-      window.hls = null;
-    }
-
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-
-    if (Hls.isSupported() && url.includes(".m3u8")) {
-      const hls = new Hls();
-      hls.loadSource(proxyBase + encodeURIComponent(url));
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-      window.hls = hls;
-    } else {
-      video.src = proxyBase + encodeURIComponent(url);
-      video.play().catch(() => alert("Could not play this video."));
-    }
-  }
-</script>
+  </script>
 
 </body>
 </html>

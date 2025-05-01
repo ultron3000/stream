@@ -114,18 +114,29 @@ async function loadStream() {
   showSpinner();
   let finalUrl = input;
 
-  // .txt playlist support
   if (input.endsWith(".txt") || input.includes(".txt?")) {
     try {
       const response = await fetch(input);
       const text = await response.text();
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
-      const stream = lines.find(l => l.includes(".m3u8") || l.includes(".mp4") || l.includes(".webm"));
+      const base = new URL(input);
+
+      const lines = text.split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(l => l && !l.startsWith("#"));
+
+      const stream = lines.find(line =>
+        /\.(m3u8|mp4|webm)(\?.*)?$/.test(line)
+      );
+
       if (!stream) {
         hideSpinner();
-        return alert("No valid stream found in the file.");
+        return alert("No valid stream found in the .txt file.");
       }
-      finalUrl = stream;
+
+      finalUrl = stream.startsWith("http")
+        ? stream
+        : new URL(stream, base).href;
+
     } catch (err) {
       hideSpinner();
       console.error("Failed to fetch .txt:", err);

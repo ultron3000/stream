@@ -2,207 +2,64 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Smart Stream Player</title>
+  <title>Proxy Stream Player</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
-    body {
-      background: black;
-      color: #ffcc00;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 { margin-bottom: 20px; font-size: 2em; }
-    input, button {
-      padding: 10px;
-      font-size: 1em;
-      margin: 10px;
-      border-radius: 6px;
-      border: none;
-    }
-    input {
-      width: 70%;
-      max-width: 600px;
-    }
-    button {
-      background: #ffcc00;
-      color: black;
-      cursor: pointer;
-    }
-    video {
-      width: 90%;
-      max-width: 1000px;
-      border: 3px solid #ffcc00;
-      border-radius: 15px;
-      background: #000;
-      margin-top: 20px;
-    }
-    #loading-spinner {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      width: 60px;
-      height: 60px;
-      margin: -30px 0 0 -30px;
-      border: 8px solid #f3f3f3;
-      border-top: 8px solid #ffcc00;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      z-index: 999;
-    }
-    #loading-text {
-      display: none;
-      position: fixed;
-      top: 60%;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 1.2em;
-      font-weight: bold;
-    }
-    .caption-button {
-      margin-top: 10px;
-      background: #ffcc00;
-      color: black;
-      border: none;
-      padding: 8px 16px;
-      font-size: 1em;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
+    body { background: black; color: #ffcc00; font-family: Arial; text-align: center; padding: 20px; }
+    input, button { padding: 10px; font-size: 1em; margin: 10px; border-radius: 6px; border: none; }
+    input { width: 70%; max-width: 600px; }
+    button { background: #ffcc00; color: black; cursor: pointer; }
+    video { width: 90%; max-width: 1000px; border: 3px solid #ffcc00; border-radius: 15px; background: #000; margin-top: 20px; }
   </style>
 </head>
 <body>
 
-<div id="loading-spinner"></div>
-<div id="loading-text">Loading video...</div>
+<h1>📺 Proxy Stream Player</h1>
 
-<h1>📺 Smart Stream Player</h1>
-
-<input id="streamInput" type="text" placeholder="Paste .m3u8 / .mp4 / .txt link here">
+<input id="streamInput" type="text" placeholder="Paste .txt / .m3u8 / .mp4 link">
 <button onclick="loadStream()">▶️ Play</button>
 
 <video id="video" controls autoplay crossorigin="anonymous"></video>
-<br>
-<button class="caption-button" id="toggle-captions">Toggle Subtitles</button>
 
 <script>
-const video = document.getElementById('video');
-const spinner = document.getElementById('loading-spinner');
-const loadingText = document.getElementById('loading-text');
-const toggleBtn = document.getElementById('toggle-captions');
+  async function loadStream() {
+    const input = document.getElementById('streamInput').value.trim();
+    const video = document.getElementById('video');
+    if (!input) return alert("Enter a link.");
 
-function showSpinner() {
-  spinner.style.display = "block";
-  loadingText.style.display = "block";
-}
-function hideSpinner() {
-  spinner.style.display = "none";
-  loadingText.style.display = "none";
-}
+    let finalUrl = input;
 
-async function loadStream() {
-  const input = document.getElementById('streamInput').value.trim();
-  if (!input) return alert("Please enter a video or playlist link.");
-
-  showSpinner();
-  let finalUrl = input;
-
-  // ✅ FIXED: Handle .txt playlist and fetch first valid link (any type)
-  if (input.endsWith(".txt") || input.includes(".txt?")) {
-    try {
-      const response = await fetch(input);
-      const text = await response.text();
-      const base = new URL(input);
-
-      const lines = text.split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(l => l && !l.startsWith("#"));
-
-      // ✅ Accept any http/https or relative link — no extension needed
-      const stream = lines.find(line =>
-        line.startsWith("http") || line.startsWith("/")
-      );
-
-      if (!stream) {
-        hideSpinner();
-        return alert("No valid stream found in the .txt file.");
+    if (input.includes(".txt")) {
+      try {
+        const response = await fetch(`/proxy?url=${encodeURIComponent(input)}`);
+        const text = await response.text();
+        const base = new URL(input);
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
+        const stream = lines.find(l => l.startsWith("http") || l.startsWith("/"));
+        if (!stream) return alert("No valid link in .txt");
+        finalUrl = stream.startsWith("http") ? stream : new URL(stream, base).href;
+      } catch (e) {
+        return alert("Could not fetch .txt file.");
       }
+    }
 
-      finalUrl = stream.startsWith("http")
-        ? stream
-        : new URL(stream, base).href;
+    const proxied = `/proxy?url=${encodeURIComponent(finalUrl)}`;
 
-    } catch (err) {
-      hideSpinner();
-      console.error("Failed to fetch .txt:", err);
-      return alert("Could not load or parse the .txt file.");
+    if (window.hls) window.hls.destroy();
+    video.pause(); video.removeAttribute('src'); video.load();
+
+    if (Hls.isSupported() && finalUrl.includes(".m3u8")) {
+      const hls = new Hls();
+      hls.loadSource(proxied);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+      window.hls = hls;
+    } else {
+      video.src = proxied;
+      video.play().catch(() => alert("Cannot play this stream."));
     }
   }
-
-  playStream(finalUrl);
-}
-
-function playStream(url) {
-  const saveKey = `resume-${url}`;
-
-  if (window.hls) {
-    window.hls.destroy();
-    window.hls = null;
-  }
-
-  video.pause();
-  video.removeAttribute("src");
-  video.load();
-
-  if (Hls.isSupported() && url.includes(".m3u8")) {
-    const hls = new Hls();
-    hls.loadSource(url);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      hideSpinner();
-      const lastTime = localStorage.getItem(saveKey);
-      if (lastTime) video.currentTime = parseFloat(lastTime);
-      video.play();
-    });
-    window.hls = hls;
-  } else {
-    video.src = url;
-    video.addEventListener("loadedmetadata", () => {
-      hideSpinner();
-      const lastTime = localStorage.getItem(saveKey);
-      if (lastTime) video.currentTime = parseFloat(lastTime);
-      video.play();
-    });
-  }
-
-  setInterval(() => {
-    if (!isNaN(video.currentTime)) {
-      localStorage.setItem(saveKey, video.currentTime);
-    }
-  }, 5000);
-}
-
-toggleBtn.addEventListener("click", () => {
-  for (const track of video.textTracks) {
-    track.mode = track.mode === "showing" ? "hidden" : "showing";
-  }
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.code === "ArrowRight") video.currentTime += 10;
-  else if (e.code === "ArrowLeft") video.currentTime -= 10;
-  else if (e.code === "Space") {
-    e.preventDefault();
-    video.paused ? video.play() : video.pause();
-  }
-});
 </script>
 
 </body>

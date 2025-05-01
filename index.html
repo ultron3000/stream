@@ -10,13 +10,13 @@
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-3xl p-6 bg-gray-800 rounded-2xl shadow-2xl">
     <h1 class="text-3xl font-bold mb-4 text-center">📺 Stream Player</h1>
-    <p class="text-sm text-gray-400 mb-6 text-center">Paste a valid video stream URL below (e.g. .m3u8, .mp4, or a .txt file containing playlist links)</p>
+    <p class="text-sm text-gray-400 mb-6 text-center">Paste a valid stream URL (.m3u8, .mp4, or .txt file)</p>
 
     <div class="flex gap-2 mb-4">
       <input
         id="streamUrl"
         type="text"
-        placeholder="Enter stream URL (e.g., https://example.com/stream.m3u8)"
+        placeholder="Enter stream URL"
         class="flex-1 px-4 py-2 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none"
       />
       <button
@@ -32,83 +32,79 @@
 
   <script>
     async function loadStream() {
-      const url = document.getElementById('streamUrl').value.trim();
-      const video = document.getElementById('video');
+      const input = document.getElementById("streamUrl");
+      const video = document.getElementById("video");
+      const url = input.value.trim();
 
-      if (!url) return alert('Please enter a stream URL');
+      if (!url) return alert("Please enter a stream URL");
 
       // Reset player
       video.pause();
-      video.removeAttribute('src');
+      video.removeAttribute("src");
       video.load();
-
       if (window.hls) {
         window.hls.destroy();
         window.hls = null;
       }
 
       let finalUrl = url;
+      const isTxt = /\.txt(\?.*)?$/i.test(url);
 
-      try {
-        // Check if it's a .txt or .txt?something file
-        const isTxt = /\.txt(\?.*)?$/.test(url);
-
-        if (isTxt) {
-          const response = await fetch(url);
-          const text = await response.text();
-
+      if (isTxt) {
+        try {
+          const res = await fetch(url);
+          const text = await res.text();
           const lines = text
             .split(/\r?\n/)
             .map(line => line.trim())
-            .filter(line => line && !line.startsWith('#'));
+            .filter(line => line && !line.startsWith("#"));
 
-          const validLine = lines.find(line => line.includes('.m3u8') || line.includes('.mp4') || line.startsWith('http'));
+          const validLine = lines.find(line =>
+            line.match(/\\.m3u8|\\.mp4|\\.ts|^https?:\\/\\//i)
+          );
 
-          if (!validLine) {
-            alert('No playable stream found in the file.');
-            return;
-          }
-
-          finalUrl = validLine.startsWith('http') ? validLine : new URL(validLine, url).href;
+          if (!validLine) return alert("No playable stream found in the file.");
+          finalUrl = validLine.startsWith("http")
+            ? validLine
+            : new URL(validLine, url).href;
+        } catch (err) {
+          console.error("Error fetching playlist:", err);
+          return alert("Failed to load or parse the .txt file.");
         }
-
-        console.log('Trying to play stream:', finalUrl);
-        loadToPlayer(finalUrl);
-      } catch (err) {
-        console.error('Failed to load or parse file:', err);
-        alert('Could not parse the file or retrieve the stream URL.');
       }
+
+      playStream(finalUrl);
     }
 
-    function loadToPlayer(sourceUrl) {
-      const video = document.getElementById('video');
+    function playStream(url) {
+      const video = document.getElementById("video");
 
-      if (Hls.isSupported() && sourceUrl.includes('.m3u8')) {
+      if (Hls.isSupported()) {
         const hls = new Hls();
-        hls.loadSource(sourceUrl);
+        hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           video.play();
         });
         hls.on(Hls.Events.ERROR, (event, data) => {
-          console.error('HLS.js error:', data);
+          console.error("HLS.js error:", data);
           if (data.fatal) {
             hls.destroy();
-            tryNativePlayback(sourceUrl);
+            tryNativePlayback(url);
           }
         });
         window.hls = hls;
       } else {
-        tryNativePlayback(sourceUrl);
+        tryNativePlayback(url);
       }
     }
 
     function tryNativePlayback(url) {
-      const video = document.getElementById('video');
+      const video = document.getElementById("video");
       video.src = url;
       video.play().catch(err => {
-        console.error('Native playback failed:', err);
-        alert('Could not play the stream. Please check the link.');
+        console.error("Native playback error:", err);
+        alert("Could not play the stream. Please check the link.");
       });
     }
   </script>

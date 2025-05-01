@@ -2,27 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Smart Proxy Video Player</title>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HD Streamz Loader</title>
   <style>
     body {
-      background: black;
+      background: #111;
       color: #ffcc00;
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       text-align: center;
-      padding: 20px;
-      margin: 0;
-    }
-    video {
-      width: 90%;
-      max-width: 1000px;
-      border: 3px solid #ffcc00;
-      border-radius: 15px;
-      background: #000;
+      padding: 40px;
     }
     input, button {
-      padding: 10px;
+      padding: 12px;
       font-size: 1em;
       margin: 10px;
       border-radius: 6px;
@@ -37,69 +28,40 @@
       color: black;
       cursor: pointer;
     }
-    #status {
-      margin-top: 10px;
-      color: red;
-      font-size: 0.9em;
-    }
   </style>
 </head>
 <body>
 
-<h1>🎬 Proxy Video Player</h1>
-<input id="streamUrl" type="text" placeholder="Paste .m3u8 / .mp4 / .txt link here">
-<button onclick="loadStream()">▶️ Play</button>
-
-<video id="video" controls autoplay crossorigin="anonymous"></video>
-<div id="status"></div>
+<h1>🔗 Load Stream</h1>
+<input id="streamInput" type="text" placeholder="Paste .txt or stream URL here">
+<br>
+<button onclick="handleStream()">Play</button>
 
 <script>
-  async function loadStream() {
-    const input = document.getElementById("streamUrl").value.trim();
-    const video = document.getElementById("video");
-    const status = document.getElementById("status");
-    status.textContent = "";
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-    if (window.hls) {
-      window.hls.destroy();
-      window.hls = null;
-    }
+  async function handleStream() {
+    const input = document.getElementById("streamInput").value.trim();
+    if (!input) return alert("Please enter a stream URL");
 
-    try {
-      let url = input;
+    let finalUrl = input;
 
-      if (url.endsWith(".txt") || url.includes(".txt?")) {
-        const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+    if (input.endsWith(".txt") || input.includes(".txt?")) {
+      try {
+        const res = await fetch(input);
         const text = await res.text();
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
-        const streamUrl = lines.find(line => line.includes(".m3u8") || line.includes(".mp4"));
-        if (!streamUrl) return status.textContent = "No valid stream found in .txt file.";
-        url = streamUrl;
+        const valid = lines.find(line => line.includes(".m3u8") || line.includes(".mp4"));
+        if (!valid) return alert("No playable stream found in the .txt file");
+        finalUrl = valid;
+      } catch (err) {
+        console.error("Failed to load .txt file", err);
+        return alert("Could not load the .txt file.");
       }
-
-      const proxied = `/proxy?url=${encodeURIComponent(url)}`;
-
-      if (Hls.isSupported() && url.includes(".m3u8")) {
-        const hls = new Hls();
-        hls.loadSource(proxied);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-        window.hls = hls;
-      } else {
-        video.src = proxied;
-        video.play().catch(err => {
-          status.textContent = "Native playback failed.";
-          console.error(err);
-        });
-      }
-
-    } catch (err) {
-      console.error("Load error:", err);
-      status.textContent = "Error loading stream.";
     }
+
+    // Redirect to your existing Ironman.html
+    window.location.href = `Ironman.html?title=Stream&video=${encodeURIComponent(finalUrl)}`;
   }
 </script>
+
 </body>
 </html>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Proxy Stream Player</title>
+  <title>Global Smart Stream Player</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
@@ -15,49 +15,58 @@
 </head>
 <body>
 
-<h1>📺 Proxy Stream Player</h1>
-
-<input id="streamInput" type="text" placeholder="Paste .txt / .m3u8 / .mp4 link">
+<h1>📺 Smart Stream Player (Online)</h1>
+<input id="streamInput" type="text" placeholder="Paste .txt / .m3u8 / .mp4 link here">
 <button onclick="loadStream()">▶️ Play</button>
 
 <video id="video" controls autoplay crossorigin="anonymous"></video>
 
 <script>
+  const video = document.getElementById("video");
+  const proxyBase = "https://api.allorigins.win/raw?url=";
+
   async function loadStream() {
-    const input = document.getElementById('streamInput').value.trim();
-    const video = document.getElementById('video');
-    if (!input) return alert("Enter a link.");
+    const input = document.getElementById("streamInput").value.trim();
+    if (!input) return alert("Please enter a link.");
 
     let finalUrl = input;
 
-    if (input.includes(".txt")) {
+    if (input.endsWith(".txt") || input.includes(".txt?")) {
       try {
-        const response = await fetch(`/proxy?url=${encodeURIComponent(input)}`);
+        const response = await fetch(proxyBase + encodeURIComponent(input));
         const text = await response.text();
         const base = new URL(input);
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
-        const stream = lines.find(l => l.startsWith("http") || l.startsWith("/"));
-        if (!stream) return alert("No valid link in .txt");
+        const stream = lines.find(l => l.startsWith("http") || l.startsWith("/") || l.includes(".m3u8") || l.includes(".mp4"));
+        if (!stream) return alert("No valid stream found in .txt");
         finalUrl = stream.startsWith("http") ? stream : new URL(stream, base).href;
       } catch (e) {
-        return alert("Could not fetch .txt file.");
+        return alert("Error loading .txt file. CORS or network blocked.");
       }
     }
 
-    const proxied = `/proxy?url=${encodeURIComponent(finalUrl)}`;
+    playStream(finalUrl);
+  }
 
-    if (window.hls) window.hls.destroy();
-    video.pause(); video.removeAttribute('src'); video.load();
+  function playStream(url) {
+    if (window.hls) {
+      window.hls.destroy();
+      window.hls = null;
+    }
 
-    if (Hls.isSupported() && finalUrl.includes(".m3u8")) {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+
+    if (Hls.isSupported() && url.includes(".m3u8")) {
       const hls = new Hls();
-      hls.loadSource(proxied);
+      hls.loadSource(proxyBase + encodeURIComponent(url));
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
       window.hls = hls;
     } else {
-      video.src = proxied;
-      video.play().catch(() => alert("Cannot play this stream."));
+      video.src = proxyBase + encodeURIComponent(url);
+      video.play().catch(() => alert("Could not play this video."));
     }
   }
 </script>

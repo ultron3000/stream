@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Universal Stream Player</title>
+  <title>Network Stream Player</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     body {
-      background: black;
-      color: white;
+      background: #000;
+      color: #ffcc00;
       text-align: center;
       font-family: Arial, sans-serif;
       padding: 20px;
@@ -26,23 +26,25 @@
       margin-left: 10px;
       border-radius: 5px;
       border: none;
-      background-color: #1e88e5;
-      color: white;
+      background-color: #ffcc00;
+      color: black;
       cursor: pointer;
     }
     video {
       margin-top: 20px;
       width: 100%;
-      max-width: 800px;
+      max-width: 900px;
       height: auto;
       background: black;
+      border: 3px solid #ffcc00;
+      border-radius: 15px;
     }
   </style>
 </head>
 <body>
 
-  <h2>Universal Network Stream Player</h2>
-  <input type="text" id="streamUrl" placeholder="Paste .txt, .m3u8, or .mp4 link" />
+  <h2>Network Stream Player</h2>
+  <input type="text" id="streamUrl" placeholder="Paste stream link (.txt, .m3u8, .mp4)" />
   <button onclick="playStream()">Play</button>
 
   <video id="videoPlayer" controls autoplay crossorigin="anonymous"></video>
@@ -52,21 +54,21 @@
       const video = document.getElementById('videoPlayer');
       const url = document.getElementById('streamUrl').value.trim();
 
-      // Clear previous source
+      // Reset previous playback
       video.pause();
-      video.src = "";
+      video.removeAttribute('src');
       video.load();
 
       if (Hls.isSupported()) {
         const hls = new Hls();
-        hls.loadSource(url);
+        hls.loadSource(url); // Directly pass URL, even if it's .txt
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           video.play();
         });
         hls.on(Hls.Events.ERROR, function (event, data) {
           if (data.fatal) {
-            alert("HLS error: " + data.details);
+            alert("HLS playback error: " + data.details);
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -75,7 +77,7 @@
           video.play();
         });
       } else {
-        video.src = url;
+        video.src = url; // Fallback for .mp4
         video.load();
         video.play();
       }

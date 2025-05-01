@@ -31,7 +31,7 @@
   </div>
 
   <script>
-    function loadStream() {
+    async function loadStream() {
       const url = document.getElementById('streamUrl').value.trim();
       const video = document.getElementById('video');
 
@@ -47,10 +47,42 @@
         window.hls = null;
       }
 
-      // Use HLS.js if possible
+      try {
+        let finalUrl = url;
+
+        // Handle .txt and .m3u8 playlists
+        if (url.endsWith('.txt') || url.endsWith('.m3u8')) {
+          const response = await fetch(url);
+          const text = await response.text();
+          const lines = text.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+          const firstValid = lines.find(line => line.endsWith('.m3u8') || line.endsWith('.mp4') || line.includes('http'));
+
+          if (firstValid) {
+            if (!firstValid.startsWith('http')) {
+              const base = url.substring(0, url.lastIndexOf('/') + 1);
+              finalUrl = base + firstValid;
+            } else {
+              finalUrl = firstValid;
+            }
+          } else {
+            alert('No playable stream found in the file.');
+            return;
+          }
+        }
+
+        loadToPlayer(finalUrl);
+      } catch (err) {
+        console.error('Error processing playlist or file:', err);
+        alert('Could not parse the file or playlist.');
+      }
+    }
+
+    function loadToPlayer(sourceUrl) {
+      const video = document.getElementById('video');
+
       if (Hls.isSupported()) {
         const hls = new Hls();
-        hls.loadSource(url);
+        hls.loadSource(sourceUrl);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           video.play();
@@ -59,13 +91,12 @@
           console.warn('HLS.js warning/error:', data);
           if (data.fatal) {
             hls.destroy();
-            // Fallback to native video player
-            tryNativePlayback(url);
+            tryNativePlayback(sourceUrl);
           }
         });
         window.hls = hls;
       } else {
-        tryNativePlayback(url);
+        tryNativePlayback(sourceUrl);
       }
     }
 

@@ -37,32 +37,45 @@
 
       if (!url) return alert('Please enter a stream URL');
 
-      // Reset source and HLS if needed
+      // Reset previous sources
       video.pause();
-      video.src = '';
+      video.removeAttribute('src');
+      video.load();
+
       if (window.hls) {
         window.hls.destroy();
         window.hls = null;
       }
 
-      // Always try to use HLS.js if supported
+      // Use HLS.js if possible
       if (Hls.isSupported()) {
-        window.hls = new Hls();
-        window.hls.loadSource(url);
-        window.hls.attachMedia(video);
-        window.hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
           video.play();
         });
-        window.hls.on(Hls.Events.ERROR, function (event, data) {
-          console.error("HLS.js error:", data);
-          alert("Could not play the stream. Check the link.");
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.warn('HLS.js warning/error:', data);
+          if (data.fatal) {
+            hls.destroy();
+            // Fallback to native video player
+            tryNativePlayback(url);
+          }
         });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl') || url.endsWith('.mp4') || url.endsWith('.webm')) {
-        video.src = url;
-        video.play();
+        window.hls = hls;
       } else {
-        alert('This browser does not support the video format or stream type.');
+        tryNativePlayback(url);
       }
+    }
+
+    function tryNativePlayback(url) {
+      const video = document.getElementById('video');
+      video.src = url;
+      video.play().catch(err => {
+        console.error('Playback error:', err);
+        alert('Could not play the stream. Please check the link.');
+      });
     }
   </script>
 </body>

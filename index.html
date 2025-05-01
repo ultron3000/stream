@@ -10,7 +10,7 @@
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-3xl p-6 bg-gray-800 rounded-2xl shadow-2xl">
     <h1 class="text-3xl font-bold mb-4 text-center">📺 Stream Player</h1>
-    <p class="text-sm text-gray-400 mb-6 text-center">Paste a valid stream URL (.m3u8, .mp4, or .txt file)</p>
+    <p class="text-sm text-gray-400 mb-6 text-center">Supports .m3u8, .mp4, and .txt playlist links</p>
 
     <div class="flex gap-2 mb-4">
       <input
@@ -28,15 +28,22 @@
     <div class="aspect-w-16 aspect-h-9 w-full bg-black rounded-xl overflow-hidden">
       <video id="video" class="w-full h-full" controls></video>
     </div>
+
+    <p id="status" class="text-red-400 text-sm mt-4 text-center"></p>
   </div>
 
   <script>
     async function loadStream() {
       const input = document.getElementById("streamUrl");
       const video = document.getElementById("video");
+      const status = document.getElementById("status");
       const url = input.value.trim();
 
-      if (!url) return alert("Please enter a stream URL");
+      status.textContent = "";
+      if (!url) {
+        status.textContent = "Please enter a stream URL.";
+        return;
+      }
 
       // Reset player
       video.pause();
@@ -48,8 +55,9 @@
       }
 
       let finalUrl = url;
-      const isTxt = /\.txt(\?.*)?$/i.test(url);
 
+      // Check for .txt file
+      const isTxt = /\.txt(\?.*)?$/i.test(url);
       if (isTxt) {
         try {
           const res = await fetch(url);
@@ -60,51 +68,51 @@
             .filter(line => line && !line.startsWith("#"));
 
           const validLine = lines.find(line =>
-            line.match(/\\.m3u8|\\.mp4|\\.ts|^https?:\\/\\//i)
+            /^https?:\/\/.+/i.test(line)
           );
 
-          if (!validLine) return alert("No playable stream found in the file.");
-          finalUrl = validLine.startsWith("http")
-            ? validLine
-            : new URL(validLine, url).href;
+          if (!validLine) {
+            status.textContent = "No playable stream found in the file.";
+            return;
+          }
+
+          finalUrl = validLine;
         } catch (err) {
-          console.error("Error fetching playlist:", err);
-          return alert("Failed to load or parse the .txt file.");
+          console.error("Error loading .txt file:", err);
+          status.textContent = "Could not load or parse the .txt file.";
+          return;
         }
       }
 
-      playStream(finalUrl);
-    }
-
-    function playStream(url) {
-      const video = document.getElementById("video");
-
-      if (Hls.isSupported()) {
+      // Try HLS first
+      if (Hls.isSupported() && finalUrl.includes(".m3u8")) {
         const hls = new Hls();
-        hls.loadSource(url);
+        hls.loadSource(finalUrl);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play();
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+          video.play().catch(err => {
+            console.error("Autoplay blocked:", err);
+            status.textContent = "Click the play button on the video.";
+          });
         });
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          console.error("HLS.js error:", data);
+        hls.on(Hls.Events.ERROR, function (_, data) {
+          console.error("HLS error:", data);
           if (data.fatal) {
             hls.destroy();
-            tryNativePlayback(url);
+            tryNative(video, finalUrl, status);
           }
         });
         window.hls = hls;
       } else {
-        tryNativePlayback(url);
+        tryNative(video, finalUrl, status);
       }
     }
 
-    function tryNativePlayback(url) {
-      const video = document.getElementById("video");
+    function tryNative(video, url, status) {
       video.src = url;
       video.play().catch(err => {
-        console.error("Native playback error:", err);
-        alert("Could not play the stream. Please check the link.");
+        console.error("Native error:", err);
+        status.textContent = "Could not play the stream. Check the link or CORS settings.";
       });
     }
   </script>

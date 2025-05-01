@@ -27,7 +27,7 @@ app.get('/extract', async (req, res) => {
 
   page.on('request', req => {
     const url = req.url();
-    console.log('Request:', url); // Debug log
+    console.log('Request:', url);
     if (url.match(/\\.m3u8|\\.mp4|\\.m4v/i)) {
       videoLinks.add(url);
     }
@@ -36,16 +36,18 @@ app.get('/extract', async (req, res) => {
   try {
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-    // Try to interact with a video element (if one exists)
+    // Generic click to trigger JS-based players
     try {
-  await page.mouse.click(100, 100); // click somewhere to trigger play/init
-  console.log('Simulated click at (100, 100)');
-  await page.waitForTimeout(5000);
-} catch (err) {
-  console.log('Click simulation failed:', err.message);
-}
+      await page.mouse.click(100, 100);
+      console.log('Simulated user click at (100, 100)');
+    } catch (err) {
+      console.log('Click simulation failed:', err.message);
+    }
 
-    await page.waitForTimeout(3000); // final wait to catch late requests
+    await page.waitForTimeout(5000); // Wait for network requests
+
+    console.log('Collected video links:', [...videoLinks]);
+
     await browser.close();
     res.json([...videoLinks]);
   } catch (err) {

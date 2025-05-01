@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Smart Video Caster</title>
+  <title>Smart Proxy Video Player</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     body {
@@ -14,7 +14,6 @@
       padding: 20px;
       margin: 0;
     }
-    h1 { font-size: 2em; margin-bottom: 10px; }
     video {
       width: 90%;
       max-width: 1000px;
@@ -38,181 +37,69 @@
       color: black;
       cursor: pointer;
     }
-    #loading-spinner {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      width: 60px;
-      height: 60px;
-      margin: -30px 0 0 -30px;
-      border: 8px solid #f3f3f3;
-      border-top: 8px solid #ffcc00;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      z-index: 999;
-    }
-    #loading-text {
-      display: none;
-      position: fixed;
-      top: 60%;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 1.2em;
-      font-weight: bold;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    #status {
+      margin-top: 10px;
+      color: red;
+      font-size: 0.9em;
     }
   </style>
 </head>
 <body>
 
-<h1>🎥 Smart Video Player</h1>
+<h1>🎬 Proxy Video Player</h1>
+<input id="streamUrl" type="text" placeholder="Paste .m3u8 / .mp4 / .txt link here">
+<button onclick="loadStream()">▶️ Play</button>
 
-<input type="text" id="streamInput" placeholder="Paste stream URL, .txt, or webpage">
-<button onclick="handleInput()">▶️ Load</button>
-
-<div id="loading-spinner"></div>
-<div id="loading-text">Loading video...</div>
-
-<video id="video" controls crossorigin="anonymous"></video>
-<br>
-<button id="toggle-captions">Toggle Subtitles</button>
-
-<div id="linkList" style="margin-top:20px;"></div>
+<video id="video" controls autoplay crossorigin="anonymous"></video>
+<div id="status"></div>
 
 <script>
-  const proxy = "https://api.allorigins.win/raw?url=";
-  const video = document.getElementById("video");
-  const spinner = document.getElementById("loading-spinner");
-  const loadingText = document.getElementById("loading-text");
-  const toggleBtn = document.getElementById("toggle-captions");
-
-  function showSpinner() {
-    spinner.style.display = "block";
-    loadingText.style.display = "block";
-  }
-
-  function hideSpinner() {
-    spinner.style.display = "none";
-    loadingText.style.display = "none";
-  }
-
-  function isDirectLink(url) {
-    return /\.(m3u8|mp4|webm|txt)(\?.*)?$/.test(url);
-  }
-
-  async function handleInput() {
-    const input = document.getElementById("streamInput").value.trim();
-    document.getElementById("linkList").innerHTML = "";
-    if (!input) return alert("Please enter a URL.");
-
-    showSpinner();
-
-    if (/\.txt(\?.*)?$/i.test(input)) {
-      try {
-        const res = await fetch(input);
-        const text = await res.text();
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
-        const valid = lines.find(line => /\.(m3u8|mp4|webm)/.test(line));
-        if (!valid) return alert("No playable link found in the file.");
-        loadToPlayer(valid, "Stream");
-      } catch (err) {
-        alert("Error loading .txt file.");
-      }
-    } else if (isDirectLink(input)) {
-      loadToPlayer(input, "Stream");
-    } else {
-      extractLinksFromPage(input);
-    }
-  }
-
-  async function extractLinksFromPage(pageUrl) {
-    try {
-      const res = await fetch(proxy + encodeURIComponent(pageUrl));
-      const html = await res.text();
-      const links = [...html.matchAll(/https?:\/\/[^\s"'<>]+/g)]
-        .map(m => m[0])
-        .filter(link => /\.(m3u8|mp4|webm)(\?.*)?$/.test(link));
-
-      hideSpinner();
-
-      if (!links.length) {
-        document.getElementById("linkList").innerHTML = "<p style='color:red'>No playable links found on the page.</p>";
-        return;
-      }
-
-      const list = document.getElementById("linkList");
-      links.forEach(link => {
-        const div = document.createElement("div");
-        div.style.margin = "10px 0";
-        div.innerHTML = `<a href="#" style="color:#ffcc00" onclick="loadToPlayer('${link}', 'Stream from Page')">${link}</a>`;
-        list.appendChild(div);
-      });
-    } catch (err) {
-      hideSpinner();
-      console.error("Failed to fetch page:", err);
-      alert("Could not fetch page content.");
-    }
-  }
-
-  function loadToPlayer(url, title) {
-    showSpinner();
-    const saveKey = `resume-${title}`;
+  async function loadStream() {
+    const input = document.getElementById("streamUrl").value.trim();
+    const video = document.getElementById("video");
+    const status = document.getElementById("status");
+    status.textContent = "";
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
     if (window.hls) {
       window.hls.destroy();
       window.hls = null;
     }
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
 
-    if (Hls.isSupported() && url.includes(".m3u8")) {
-      const hls = new Hls();
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        hideSpinner();
-        const saved = localStorage.getItem(saveKey);
-        if (saved) video.currentTime = parseFloat(saved);
-        video.play();
-      });
-      window.hls = hls;
-    } else {
-      video.src = url;
-      video.addEventListener("loadedmetadata", () => {
-        hideSpinner();
-        const saved = localStorage.getItem(saveKey);
-        if (saved) video.currentTime = parseFloat(saved);
-        video.play();
-      });
-    }
+    try {
+      let url = input;
 
-    // Save playback progress
-    setInterval(() => {
-      if (!isNaN(video.currentTime)) {
-        localStorage.setItem(saveKey, video.currentTime);
+      if (url.endsWith(".txt") || url.includes(".txt?")) {
+        const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+        const text = await res.text();
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
+        const streamUrl = lines.find(line => line.includes(".m3u8") || line.includes(".mp4"));
+        if (!streamUrl) return status.textContent = "No valid stream found in .txt file.";
+        url = streamUrl;
       }
-    }, 5000);
+
+      const proxied = `/proxy?url=${encodeURIComponent(url)}`;
+
+      if (Hls.isSupported() && url.includes(".m3u8")) {
+        const hls = new Hls();
+        hls.loadSource(proxied);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        window.hls = hls;
+      } else {
+        video.src = proxied;
+        video.play().catch(err => {
+          status.textContent = "Native playback failed.";
+          console.error(err);
+        });
+      }
+
+    } catch (err) {
+      console.error("Load error:", err);
+      status.textContent = "Error loading stream.";
+    }
   }
-
-  toggleBtn.addEventListener("click", () => {
-    for (const track of video.textTracks) {
-      track.mode = track.mode === "showing" ? "hidden" : "showing";
-    }
-  });
-
-  // Keyboard controls
-  document.addEventListener("keydown", (e) => {
-    if (e.code === "ArrowRight") video.currentTime += 10;
-    else if (e.code === "ArrowLeft") video.currentTime -= 10;
-    else if (e.code === "Space") {
-      e.preventDefault();
-      video.paused ? video.play() : video.pause();
-    }
-  });
 </script>
 </body>
 </html>

@@ -26,11 +26,12 @@ app.get('/extract', async (req, res) => {
   const videoLinks = new Set();
 
   page.on('request', req => {
-    const url = req.url();
-    if (url.match(/\\.m3u8|\\.mp4|\\.m4v/i)) {
-      videoLinks.add(url);
-    }
-  });
+  const url = req.url();
+  console.log('Request:', url); // Debug log
+  if (url.match(/\\.m3u8|\\.mp4|\\.m4v/i)) {
+    videoLinks.add(url);
+  }
+});
 
   try {
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });

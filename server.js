@@ -38,12 +38,12 @@ app.get('/extract', async (req, res) => {
 
     // Try to interact with a video element (if one exists)
     try {
-      await page.waitForSelector('video', { timeout: 5000 });
-      await page.click('video');
-      await page.waitForTimeout(3000); // wait after click
-    } catch (err) {
-      console.log('No clickable <video> found or interaction failed.');
-    }
+  await page.mouse.click(100, 100); // click somewhere to trigger play/init
+  console.log('Simulated click at (100, 100)');
+  await page.waitForTimeout(5000);
+} catch (err) {
+  console.log('Click simulation failed:', err.message);
+}
 
     await page.waitForTimeout(3000); // final wait to catch late requests
     await browser.close();

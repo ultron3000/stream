@@ -3,135 +3,216 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Smart Video Player</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
+  <title>Smart Video Caster</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    body {
+      background: black;
+      color: #ffcc00;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      margin: 0;
+    }
+    h1 { font-size: 2em; margin-bottom: 10px; }
+    video {
+      width: 90%;
+      max-width: 1000px;
+      border: 3px solid #ffcc00;
+      border-radius: 15px;
+      background: #000;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 1em;
+      margin: 10px;
+      border-radius: 6px;
+      border: none;
+    }
+    input {
+      width: 70%;
+      max-width: 600px;
+    }
+    button {
+      background: #ffcc00;
+      color: black;
+      cursor: pointer;
+    }
+    #loading-spinner {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 60px;
+      height: 60px;
+      margin: -30px 0 0 -30px;
+      border: 8px solid #f3f3f3;
+      border-top: 8px solid #ffcc00;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      z-index: 999;
+    }
+    #loading-text {
+      display: none;
+      position: fixed;
+      top: 60%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-start p-6">
-  <h1 class="text-3xl font-bold mb-6 text-center">🎥 Smart Stream Player</h1>
+<body>
 
-  <div class="w-full max-w-3xl space-y-4">
-    <input id="streamUrl" type="text" placeholder="Paste stream URL or video page"
-      class="w-full px-4 py-2 rounded-lg bg-gray-700 placeholder-gray-400 text-white" />
+<h1>🎥 Smart Video Player</h1>
 
-    <button onclick="handleInput()"
-      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg w-full font-semibold">Load</button>
+<input type="text" id="streamInput" placeholder="Paste stream URL, .txt, or webpage">
+<button onclick="handleInput()">▶️ Load</button>
 
-    <div id="linkList" class="space-y-3"></div>
+<div id="loading-spinner"></div>
+<div id="loading-text">Loading video...</div>
 
-    <div class="aspect-w-16 aspect-h-9 w-full bg-black rounded-xl overflow-hidden mt-6">
-      <video id="video" class="w-full h-full" controls></video>
-    </div>
-  </div>
+<video id="video" controls crossorigin="anonymous"></video>
+<br>
+<button id="toggle-captions">Toggle Subtitles</button>
 
-  <script>
-    const proxy = "https://api.allorigins.win/raw?url=";
+<div id="linkList" style="margin-top:20px;"></div>
 
-    function isDirectLink(url) {
-      return /\.(m3u8|mp4|webm|txt)(\?.*)?$/.test(url);
-    }
+<script>
+  const proxy = "https://api.allorigins.win/raw?url=";
+  const video = document.getElementById("video");
+  const spinner = document.getElementById("loading-spinner");
+  const loadingText = document.getElementById("loading-text");
+  const toggleBtn = document.getElementById("toggle-captions");
 
-    async function handleInput() {
-      const input = document.getElementById("streamUrl").value.trim();
-      const list = document.getElementById("linkList");
-      list.innerHTML = "";
+  function showSpinner() {
+    spinner.style.display = "block";
+    loadingText.style.display = "block";
+  }
 
-      if (!input) return alert("Please enter a URL.");
+  function hideSpinner() {
+    spinner.style.display = "none";
+    loadingText.style.display = "none";
+  }
 
-      if (isDirectLink(input)) {
-        await handleDirectLink(input);
-      } else {
-        await extractLinksFromPage(input);
-      }
-    }
+  function isDirectLink(url) {
+    return /\.(m3u8|mp4|webm|txt)(\?.*)?$/.test(url);
+  }
 
-    async function handleDirectLink(url) {
-      if (/\.txt(\?.*)?$/.test(url)) {
-        try {
-          const res = await fetch(url);
-          const text = await res.text();
-          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
-          const valid = lines.find(line => /\.(m3u8|mp4)/.test(line));
-          if (!valid) return alert("No playable stream found in .txt file.");
-          loadToPlayer(valid);
-        } catch (err) {
-          alert("Failed to load the .txt file.");
-        }
-      } else {
-        loadToPlayer(url);
-      }
-    }
+  async function handleInput() {
+    const input = document.getElementById("streamInput").value.trim();
+    document.getElementById("linkList").innerHTML = "";
+    if (!input) return alert("Please enter a URL.");
 
-    async function extractLinksFromPage(pageUrl) {
-      const list = document.getElementById("linkList");
+    showSpinner();
+
+    if (/\.txt(\?.*)?$/i.test(input)) {
       try {
-        const res = await fetch(proxy + encodeURIComponent(pageUrl));
-        const html = await res.text();
-        const links = [...html.matchAll(/https?:\/\/[^\s"'<>]+/g)]
-          .map(m => m[0])
-          .filter(link => /\.(m3u8|mp4|webm)(\?.*)?$/.test(link));
-
-        if (!links.length) {
-          list.innerHTML = "<p class='text-red-400'>No playable links found on page.</p>";
-          return;
-        }
-
-        links.forEach(link => {
-          const div = document.createElement("div");
-          div.className = "bg-gray-700 rounded p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2";
-
-          const text = document.createElement("p");
-          text.className = "text-sm break-all";
-          text.textContent = link;
-
-          const actions = document.createElement("div");
-          actions.className = "flex gap-2 flex-wrap";
-
-          const playBtn = document.createElement("button");
-          playBtn.textContent = "▶️ Play";
-          playBtn.className = "bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm";
-          playBtn.onclick = () => loadToPlayer(link);
-
-          const copyBtn = document.createElement("button");
-          copyBtn.textContent = "📋 Copy";
-          copyBtn.className = "bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded text-sm";
-          copyBtn.onclick = () => navigator.clipboard.writeText(link);
-
-          actions.append(playBtn, copyBtn);
-          div.append(text, actions);
-          list.appendChild(div);
-        });
+        const res = await fetch(input);
+        const text = await res.text();
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
+        const valid = lines.find(line => /\.(m3u8|mp4|webm)/.test(line));
+        if (!valid) return alert("No playable link found in the file.");
+        loadToPlayer(valid, "Stream");
       } catch (err) {
-        console.error("Fetch error:", err);
-        alert("Failed to fetch page content. Check the URL or try another.");
+        alert("Error loading .txt file.");
       }
+    } else if (isDirectLink(input)) {
+      loadToPlayer(input, "Stream");
+    } else {
+      extractLinksFromPage(input);
+    }
+  }
+
+  async function extractLinksFromPage(pageUrl) {
+    try {
+      const res = await fetch(proxy + encodeURIComponent(pageUrl));
+      const html = await res.text();
+      const links = [...html.matchAll(/https?:\/\/[^\s"'<>]+/g)]
+        .map(m => m[0])
+        .filter(link => /\.(m3u8|mp4|webm)(\?.*)?$/.test(link));
+
+      hideSpinner();
+
+      if (!links.length) {
+        document.getElementById("linkList").innerHTML = "<p style='color:red'>No playable links found on the page.</p>";
+        return;
+      }
+
+      const list = document.getElementById("linkList");
+      links.forEach(link => {
+        const div = document.createElement("div");
+        div.style.margin = "10px 0";
+        div.innerHTML = `<a href="#" style="color:#ffcc00" onclick="loadToPlayer('${link}', 'Stream from Page')">${link}</a>`;
+        list.appendChild(div);
+      });
+    } catch (err) {
+      hideSpinner();
+      console.error("Failed to fetch page:", err);
+      alert("Could not fetch page content.");
+    }
+  }
+
+  function loadToPlayer(url, title) {
+    showSpinner();
+    const saveKey = `resume-${title}`;
+    if (window.hls) {
+      window.hls.destroy();
+      window.hls = null;
+    }
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+
+    if (Hls.isSupported() && url.includes(".m3u8")) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hideSpinner();
+        const saved = localStorage.getItem(saveKey);
+        if (saved) video.currentTime = parseFloat(saved);
+        video.play();
+      });
+      window.hls = hls;
+    } else {
+      video.src = url;
+      video.addEventListener("loadedmetadata", () => {
+        hideSpinner();
+        const saved = localStorage.getItem(saveKey);
+        if (saved) video.currentTime = parseFloat(saved);
+        video.play();
+      });
     }
 
-    function loadToPlayer(url) {
-      const video = document.getElementById("video");
-      if (window.hls) {
-        window.hls.destroy();
-        window.hls = null;
+    // Save playback progress
+    setInterval(() => {
+      if (!isNaN(video.currentTime)) {
+        localStorage.setItem(saveKey, video.currentTime);
       }
+    }, 5000);
+  }
 
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-
-      if (Hls.isSupported() && url.includes(".m3u8")) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-        window.hls = hls;
-      } else {
-        video.src = url;
-        video.play().catch(err => {
-          console.error("Playback failed:", err);
-          alert("Could not play the stream.");
-        });
-      }
+  toggleBtn.addEventListener("click", () => {
+    for (const track of video.textTracks) {
+      track.mode = track.mode === "showing" ? "hidden" : "showing";
     }
-  </script>
+  });
+
+  // Keyboard controls
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "ArrowRight") video.currentTime += 10;
+    else if (e.code === "ArrowLeft") video.currentTime -= 10;
+    else if (e.code === "Space") {
+      e.preventDefault();
+      video.paused ? video.play() : video.pause();
+    }
+  });
+</script>
 </body>
 </html>

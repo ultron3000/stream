@@ -92,7 +92,7 @@
       linksContainer.innerHTML = '<p style="color:white">Loading...</p>';
 
       try {
-        const response = await fetch(`http://localhost:3000/extract?url=${encodeURIComponent(pageUrl)}`);
+        const response = await fetch(`https://stream-production-e59c.up.railway.app/extract?url=${encodeURIComponent(pageUrl)}`);
         const html = await response.text();
 
         // Match video, source, and direct links in HTML and JS

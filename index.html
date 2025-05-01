@@ -10,7 +10,7 @@
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-3xl p-6 bg-gray-800 rounded-2xl shadow-2xl">
     <h1 class="text-3xl font-bold mb-4 text-center">📺 Stream Player</h1>
-    <p class="text-sm text-gray-400 mb-6 text-center">Supports .m3u8, .mp4, and .txt playlist links (auto-CORS)</p>
+    <p class="text-sm text-gray-400 mb-6 text-center">Paste a valid video stream URL below (.m3u8, .mp4, or .txt playlist)</p>
 
     <div class="flex gap-2 mb-4">
       <input
@@ -28,29 +28,20 @@
     <div class="aspect-w-16 aspect-h-9 w-full bg-black rounded-xl overflow-hidden">
       <video id="video" class="w-full h-full" controls></video>
     </div>
-
-    <p id="status" class="text-red-400 text-sm mt-4 text-center"></p>
   </div>
 
   <script>
-    const corsProxy = "https://cors-proxy.elfsight.com/";
-
     async function loadStream() {
-      const input = document.getElementById("streamUrl");
-      const video = document.getElementById("video");
-      const status = document.getElementById("status");
-      const url = input.value.trim();
+      const url = document.getElementById('streamUrl').value.trim();
+      const video = document.getElementById('video');
 
-      status.textContent = "";
-      if (!url) {
-        status.textContent = "Please enter a stream URL.";
-        return;
-      }
+      if (!url) return alert('Please enter a stream URL');
 
-      // Reset video
+      // Reset player
       video.pause();
-      video.removeAttribute("src");
+      video.removeAttribute('src');
       video.load();
+
       if (window.hls) {
         window.hls.destroy();
         window.hls = null;
@@ -59,64 +50,65 @@
       let finalUrl = url;
 
       try {
-        // If it's a .txt playlist
-        if (/\.txt(\?.*)?$/i.test(url)) {
-          const res = await fetch(corsProxy + url);
-          const text = await res.text();
+        // If it's a .txt or .txt?something file
+        const isTxt = /\.txt(\?.*)?$/.test(url);
+
+        if (isTxt) {
+          const response = await fetch(url);
+          const text = await response.text();
+
           const lines = text
             .split(/\r?\n/)
-            .map(l => l.trim())
-            .filter(l => l && l.startsWith("http"));
+            .map(line => line.trim())
+            .filter(line => line && !line.startsWith('#'));
 
-          if (!lines.length) {
-            status.textContent = "No valid stream found in the .txt file.";
+          const validLine = lines.find(line => line.includes('.m3u8') || line.includes('.mp4') || line.startsWith('http'));
+
+          if (!validLine) {
+            alert('No playable stream found in the file.');
             return;
           }
 
-          finalUrl = lines[0];
+          finalUrl = validLine.startsWith('http') ? validLine : new URL(validLine, url).href;
         }
 
-        // Add CORS proxy if needed
-        if (!finalUrl.includes("cors-proxy")) {
-          finalUrl = corsProxy + finalUrl;
-        }
-
-        loadVideo(finalUrl);
+        console.log('Trying to play stream:', finalUrl);
+        loadToPlayer(finalUrl);
       } catch (err) {
-        console.error(err);
-        status.textContent = "Error loading the stream. Check the URL or try again.";
+        console.error('Failed to load or parse file:', err);
+        alert('Could not parse the file or retrieve the stream URL.');
       }
     }
 
-    function loadVideo(finalUrl) {
-      const video = document.getElementById("video");
-      const status = document.getElementById("status");
+    function loadToPlayer(sourceUrl) {
+      const video = document.getElementById('video');
 
-      if (Hls.isSupported() && finalUrl.includes(".m3u8")) {
+      if (Hls.isSupported() && sourceUrl.includes('.m3u8')) {
         const hls = new Hls();
-        hls.loadSource(finalUrl);
+        hls.loadSource(sourceUrl);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => {
-            status.textContent = "Click the play button to start.";
-          });
+          video.play();
         });
-        hls.on(Hls.Events.ERROR, (_, data) => {
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error('HLS.js error:', data);
           if (data.fatal) {
             hls.destroy();
-            tryNative(video, finalUrl, status);
+            tryNativePlayback(sourceUrl);
           }
         });
         window.hls = hls;
       } else {
-        tryNative(video, finalUrl, status);
+        tryNativePlayback(sourceUrl);
       }
     }
 
-    function tryNative(video, url, status) {
+    function tryNativePlayback(url) {
+      const video = document.getElementById('video');
       video.src = url;
-      video.play().catch(() => {
-        status.textContent = "Could not play the stream (CORS or format issue).";
+      video.play().catch(err => {
+        console.error('Native playback failed:', err);
+        alert('Could not play the stream. Please check the link.');
       });
     }
   </script>

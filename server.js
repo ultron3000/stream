@@ -26,16 +26,26 @@ app.get('/extract', async (req, res) => {
   const videoLinks = new Set();
 
   page.on('request', req => {
-  const url = req.url();
-  console.log('Request:', url); // Debug log
-  if (url.match(/\\.m3u8|\\.mp4|\\.m4v/i)) {
-    videoLinks.add(url);
-  }
-});
+    const url = req.url();
+    console.log('Request:', url); // Debug log
+    if (url.match(/\\.m3u8|\\.mp4|\\.m4v/i)) {
+      videoLinks.add(url);
+    }
+  });
 
   try {
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    await page.waitForTimeout(5000);
+
+    // Try to interact with a video element (if one exists)
+    try {
+      await page.waitForSelector('video', { timeout: 5000 });
+      await page.click('video');
+      await page.waitForTimeout(3000); // wait after click
+    } catch (err) {
+      console.log('No clickable <video> found or interaction failed.');
+    }
+
+    await page.waitForTimeout(3000); // final wait to catch late requests
     await browser.close();
     res.json([...videoLinks]);
   } catch (err) {

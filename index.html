@@ -94,7 +94,10 @@
       try {
         const response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`);
         const html = await response.text();
-        const matches = [...html.matchAll(/https?:[^\"'\s>]+\.(m3u8|mp4)/gi)];
+
+        // Match video, source, and direct links in HTML and JS
+        const regex = /https?:[^"'\s>]+\.(m3u8|mp4)(\?[^"'\s>]*)?/gi;
+        const matches = [...html.matchAll(regex)];
 
         if (matches.length === 0) {
           linksContainer.innerHTML = '<p style="color:red">No video links found.</p>';

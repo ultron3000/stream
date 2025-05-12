@@ -132,4 +132,45 @@
     }
   </script>
 </body>
+  <!-- GitHub Dark Theme Embedded Player Section -->
+<hr style="margin:40px 0; border: 1px solid #ffcc00;">
+<h2>Embed-Ready Movie Player (GitHub Pages Compatible)</h2>
+<p>Use ?movie= URL parameter to auto-load streams.</p>
+<input id="ghUrlInput" type="text" placeholder="Paste .m3u8 or .mp4 link here or use ?movie=" style="width:80%; padding:10px; margin:10px 0;" />
+<button onclick="ghPlayStream()" style="padding:10px 20px; background:#ffcc00; color:black; border:none; border-radius:6px;">Play</button>
+<br/>
+<video id="ghVideoPlayer" controls autoplay style="margin-top:20px; width:90%; max-width:900px; background:black; border:3px solid #ffcc00; border-radius:12px;"></video>
+
+<script>
+  function ghGetQueryParam(name) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(name);
+  }
+
+  function ghPlayStream() {
+    const url = document.getElementById('ghUrlInput').value.trim();
+    const video = document.getElementById('ghVideoPlayer');
+    if (Hls.isSupported() && url.endsWith(".m3u8")) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        video.play();
+      });
+    } else {
+      video.src = url;
+      video.load();
+      video.play();
+    }
+  }
+
+  window.addEventListener("load", () => {
+    const movie = ghGetQueryParam("movie");
+    if (movie) {
+      document.getElementById("ghUrlInput").value = movie;
+      ghPlayStream();
+    }
+  });
+</script>
+
 </html>

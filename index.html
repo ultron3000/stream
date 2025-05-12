@@ -172,5 +172,60 @@
     }
   });
 </script>
+  <script>
+  async function ghPlayStream() {
+    const video = document.getElementById('ghVideoPlayer');
+    const input = document.getElementById('ghUrlInput').value.trim();
+    let url = input;
+
+    // If it's a .txt file, fetch it
+    if (url.endsWith('.txt')) {
+      try {
+        const response = await fetch(url);
+        url = (await response.text()).trim();
+      } catch (err) {
+        alert("Failed to load .txt file");
+        return;
+      }
+    }
+
+    // Reset player
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+
+    // Use HLS.js for .m3u8
+    if (Hls.isSupported() && url.endsWith(".m3u8")) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        video.play();
+      });
+      hls.on(Hls.Events.ERROR, function (event, data) {
+        if (data.fatal) alert("HLS error: " + data.details);
+      });
+    } else {
+      // Fallback to native HTML5 for MP4 or supported formats
+      video.src = url;
+      video.addEventListener("loadedmetadata", () => video.play());
+      video.load();
+    }
+  }
+
+  function ghGetQueryParam(name) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(name);
+  }
+
+  window.addEventListener("load", () => {
+    const movie = ghGetQueryParam("movie");
+    if (movie) {
+      document.getElementById("ghUrlInput").value = movie;
+      ghPlayStream();
+    }
+  });
+</script>
+
 
 </html>

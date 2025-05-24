@@ -1,231 +1,690 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Network Stream Player + Link Extractor</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UltraStream Player | Advanced Network Media Player</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+    
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --accent: #f59e0b;
+      --dark: #1e293b;
+      --darker: #0f172a;
+      --light: #f8fafc;
+    }
+    
     body {
-      background: #000;
-      color: #ffcc00;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      padding: 20px;
+      font-family: 'Poppins', sans-serif;
+      background-color: var(--darker);
+      color: var(--light);
+      min-height: 100vh;
     }
-    input {
-      width: 60%;
-      padding: 10px;
-      font-size: 1rem;
-      border-radius: 5px;
-      border: none;
+    
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%; /* 16:9 aspect ratio */
+      height: 0;
+      overflow: hidden;
+      border-radius: 1rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     }
-    button {
-      padding: 10px 20px;
-      font-size: 1rem;
-      margin-left: 10px;
-      border-radius: 5px;
-      border: none;
-      background-color: #ffcc00;
-      color: black;
-      cursor: pointer;
-    }
-    video {
-      margin-top: 20px;
+    
+    .video-container video {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      max-width: 900px;
-      height: auto;
-      background: black;
-      border: 3px solid #ffcc00;
-      border-radius: 15px;
+      height: 100%;
+      background: #000;
     }
-    #links { margin-top: 20px; }
-    .link-item { margin: 10px 0; }
-    .link-item button { margin-left: 10px; }
+    
+    .link-item {
+      transition: all 0.3s ease;
+    }
+    
+    .link-item:hover {
+      transform: translateY(-2px);
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--primary);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+    
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--dark);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: var(--primary);
+      border-radius: 4px;
+    }
+    
+    /* Loading spinner */
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
-<body>
-
-  <h2>Network Stream Player</h2>
-  <input type="text" id="streamUrl" placeholder="Paste stream link (.txt, .m3u8, .mp4)" />
-  <button onclick="playStream()">Play</button>
-
-  <br><br>
-
-  <input type="text" id="pageUrl" placeholder="Paste webpage URL to extract video links" />
-  <button onclick="extractLinks()">Extract</button>
-
-  <video id="videoPlayer" controls autoplay crossorigin="anonymous"></video>
-
-  <div id="links"></div>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen">
+  <div class="container mx-auto px-4 py-8 max-w-6xl">
+    <!-- Header -->
+    <header class="mb-8 text-center">
+      <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-amber-400 mb-2">
+        UltraStream Player
+      </h1>
+      <p class="text-gray-400">Advanced network media player with link extraction</p>
+    </header>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+    
+    <!-- Main Content -->
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-xl overflow-hidden">
+      <!-- Tabs -->
+      <div class="flex border-b border-gray-700">
+        <button class="tab-btn active px-6 py-3 font-medium text-indigo-300 border-b-2 border-indigo-400" data-tab="player">
+          <i class="fas fa-play mr-2"></i> Player
+        </button>
+        <button class="tab-btn px-6 py-3 font-medium text-gray-400 hover:text-indigo-300 transition" data-tab="extractor">
+          <i class="fas fa-link mr-2"></i> Link Extractor
+        </button>
+        <button class="tab-btn px-6 py-3 font-medium text-gray-400 hover:text-indigo-300 transition" data-tab="embed">
+          <i class="fas fa-code mr-2"></i> Embed Player
+        </button>
+      </div>
+      
+      <!-- Tab Contents -->
+      <div class="p-6">
+        <!-- Player Tab -->
+        <div id="player" class="tab-content active">
+          <div class="mb-6">
+            <div class="flex flex-col md:flex-row gap-4 mb-4">
+              <input 
+                type="text" 
+                id="streamUrl" 
+                placeholder="Enter stream URL (.m3u8, .mp4, .txt)" 
+                class="flex-1 px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-400"
+              >
+              <button 
+                onclick="playStream()" 
+                class="px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-medium rounded-lg transition-all duration-300 flex items-center justify-center"
+              >
+                <i class="fas fa-play mr-2"></i> Play Stream
+              </button>
+            </div>
+            
+            <div class="video-container">
+              <video id="videoPlayer" controls autoplay crossorigin="anonymous" class="w-full"></video>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Extractor Tab -->
+        <div id="extractor" class="tab-content">
+          <div class="flex flex-col md:flex-row gap-4 mb-6">
+            <input 
+              type="text" 
+              id="pageUrl" 
+              placeholder="Enter webpage URL to extract video links" 
+              class="flex-1 px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-400"
+            >
+            <button 
+              onclick="extractLinks()" 
+              class="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-medium rounded-lg transition-all duration-300 flex items-center justify-center"
+            >
+              <i class="fas fa-search mr-2"></i> Extract Links
+            </button>
+          </div>
+          
+          <div id="links" class="bg-gray-800/50 rounded-lg p-4 max-h-96 overflow-y-auto">
+            <p class="text-gray-400 text-center">Extracted links will appear here</p>
+          </div>
+        </div>
+        
+        <!-- Embed Tab -->
+        <div id="embed" class="tab-content">
+          <div class="mb-6">
+            <div class="flex flex-col md:flex-row gap-4 mb-4">
+              <input 
+                type="text" 
+                id="ghUrlInput" 
+                placeholder="Enter stream URL or use ?movie= URL parameter" 
+                class="flex-1 px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-400"
+              >
+              <button 
+                onclick="ghPlayStream()" 
+                class="px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-medium rounded-lg transition-all duration-300 flex items-center justify-center"
+              >
+                <i class="fas fa-play mr-2"></i> Play
+              </button>
+            </div>
+            
+            <div class="video-container">
+              <video id="ghVideoPlayer" controls autoplay class="w-full"></video>
+            </div>
+            
+            <div class="mt-6 bg-gray-800/50 rounded-lg p-4">
+              <h3 class="text-lg font-medium text-indigo-300 mb-2">
+                <i class="fas fa-code mr-2"></i> Embed Code
+              </h3>
+              <p class="text-gray-400 mb-3">Use this code to embed the player on your site:</p>
+              <div class="bg-gray-900 p-3 rounded-lg overflow-x-auto">
+                <code class="text-gray-300 text-sm">
+                  &lt;iframe src="[YOUR_SITE_URL]?movie=[STREAM_URL]" width="800" height="450" frameborder="0" allowfullscreen&gt;&lt;/iframe&gt;
+                </code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Features Section -->
+    <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-700/50">
+        <div class="text-indigo-400 text-2xl mb-3">
+          <i class="fas fa-bolt"></i>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">Fast Playback</h3>
+        <p class="text-gray-400">Supports HLS, MP4 and direct stream playback with adaptive bitrate.</p>
+      </div>
+      
+      <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-700/50">
+        <div class="text-amber-400 text-2xl mb-3">
+          <i class="fas fa-link"></i>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">Link Extraction</h3>
+        <p class="text-gray-400">Automatically extracts video links from webpages for easy playback.</p>
+      </div>
+      
+      <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-700/50">
+        <div class="text-green-400 text-2xl mb-3">
+          <i class="fas fa-mobile-alt"></i>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">Responsive Design</h3>
+        <p class="text-gray-400">Works perfectly on all devices from mobile to desktop.</p>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="mt-12 text-center text-gray-500 text-sm">
+      <p>UltraStream Player &copy; 2023 | All rights reserved</p>
+    </footer>
+  </div>
 
   <script>
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'text-indigo-300', 'border-indigo-400'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.add('text-gray-400'));
+        btn.classList.add('active', 'text-indigo-300', 'border-indigo-400');
+        btn.classList.remove('text-gray-400');
+        
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+    
+    // Show toast notification
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast';
+      
+      if (type === 'error') {
+        toast.style.background = '#ef4444';
+      } else if (type === 'success') {
+        toast.style.background = '#10b981';
+      } else {
+        toast.style.background = '#6366f1';
+      }
+      
+      setTimeout(() => {
+        toast.classList.add('show');
+      }, 10);
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+    
+    // Enhanced playStream function
     function playStream(urlInputId = 'streamUrl') {
       const video = document.getElementById('videoPlayer');
       const url = document.getElementById(urlInputId).value.trim();
-
+      
+      if (!url) {
+        showToast('Please enter a stream URL', 'error');
+        return;
+      }
+      
+      // Show loading state
+      const playBtn = document.querySelector(`[onclick="playStream()"]`);
+      const originalText = playBtn.innerHTML;
+      playBtn.innerHTML = '<i class="fas fa-spinner spinner mr-2"></i> Loading...';
+      playBtn.disabled = true;
+      
+      // Reset player
       video.pause();
       video.removeAttribute('src');
       video.load();
-
-      if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-        hls.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal) alert("HLS playback error: " + data.details);
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = url;
-        video.addEventListener("loadedmetadata", () => video.play());
+      
+      // Check if URL is a .txt file (playlist)
+      const isTxtFile = url.endsWith('.txt');
+      
+      const processStream = (streamUrl) => {
+        if (Hls.isSupported() && (streamUrl.endsWith('.m3u8') || streamUrl.includes('m3u8'))) {
+          const hls = new Hls({
+            maxBufferLength: 30,
+            maxMaxBufferLength: 600,
+            maxBufferSize: 60 * 1000 * 1000,
+            maxBufferHole: 0.5,
+          });
+          
+          hls.loadSource(streamUrl);
+          hls.attachMedia(video);
+          
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play();
+            showToast('Stream started successfully', 'success');
+            playBtn.innerHTML = originalText;
+            playBtn.disabled = false;
+          });
+          
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+              switch(data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  showToast('Network error - trying to recover...', 'error');
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  showToast('Media error - trying to recover...', 'error');
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  showToast('Fatal error - cannot recover', 'error');
+                  hls.destroy();
+                  playBtn.innerHTML = originalText;
+                  playBtn.disabled = false;
+              }
+            }
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS support (Safari)
+          video.src = streamUrl;
+          video.addEventListener('loadedmetadata', () => {
+            video.play();
+            showToast('Stream started successfully', 'success');
+            playBtn.innerHTML = originalText;
+            playBtn.disabled = false;
+          });
+        } else {
+          // Direct video source
+          video.src = streamUrl;
+          video.load();
+          
+          const playAttempt = setInterval(() => {
+            video.play()
+              .then(() => {
+                clearInterval(playAttempt);
+                showToast('Stream started successfully', 'success');
+                playBtn.innerHTML = originalText;
+                playBtn.disabled = false;
+              })
+              .catch(error => {
+                if (error.name === 'NotAllowedError') {
+                  showToast('Please allow autoplay in your browser settings', 'error');
+                  clearInterval(playAttempt);
+                  playBtn.innerHTML = originalText;
+                  playBtn.disabled = false;
+                }
+              });
+          }, 500);
+        }
+      };
+      
+      if (isTxtFile) {
+        // Fetch the .txt file to get the actual stream URL
+        fetch(url)
+          .then(response => response.text())
+          .then(text => {
+            const streamUrl = text.trim();
+            processStream(streamUrl);
+          })
+          .catch(error => {
+            showToast('Failed to load .txt file', 'error');
+            console.error(error);
+            playBtn.innerHTML = originalText;
+            playBtn.disabled = false;
+          });
       } else {
-        video.src = url;
-        video.load();
-        video.play();
+        processStream(url);
       }
     }
-
+    
+    // Enhanced extractLinks function
     async function extractLinks() {
       const pageUrl = document.getElementById('pageUrl').value.trim();
       const linksContainer = document.getElementById('links');
-      linksContainer.innerHTML = '<p style="color:white">Loading...</p>';
-
+      
+      if (!pageUrl) {
+        showToast('Please enter a webpage URL', 'error');
+        return;
+      }
+      
+      // Show loading state
+      const extractBtn = document.querySelector(`[onclick="extractLinks()"]`);
+      const originalText = extractBtn.innerHTML;
+      extractBtn.innerHTML = '<i class="fas fa-spinner spinner mr-2"></i> Extracting...';
+      extractBtn.disabled = true;
+      
+      linksContainer.innerHTML = `
+        <div class="flex justify-center items-center py-8">
+          <i class="fas fa-spinner spinner text-2xl text-indigo-400 mr-3"></i>
+          <span class="text-gray-300">Extracting links from webpage...</span>
+        </div>
+      `;
+      
       try {
         const response = await fetch(`https://stream-production-e59c.up.railway.app/extract?url=${encodeURIComponent(pageUrl)}`);
-        const html = await response.text();
-
-        // Match video, source, and direct links in HTML and JS
-        const regex = /https?:[^"'\s>]+\.(m3u8|mp4)(\?[^"'\s>]*)?/gi;
-        const matches = [...html.matchAll(regex)];
-
-        if (matches.length === 0) {
-          linksContainer.innerHTML = '<p style="color:red">No video links found.</p>';
-          return;
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-
-        linksContainer.innerHTML = '<h3>Found Links:</h3>';
-        matches.forEach((match, index) => {
-          const link = match[0];
-          const id = `foundLink${index}`;
-          linksContainer.innerHTML += `
-            <div class="link-item">
-              <input type="text" id="${id}" value="${link}" readonly size="60">
-              <button onclick="copyToClipboard('${id}')">Copy</button>
-              <button onclick="document.getElementById('streamUrl').value='${link}'; playStream();">Play</button>
+        
+        const html = await response.text();
+        
+        // Enhanced regex to match more video formats and URLs
+        const regex = /https?:[^"'\s>]+\.(m3u8|mp4|mkv|avi|mov|webm|flv)(\?[^"'\s>]*)?/gi;
+        const matches = [...new Set([...html.matchAll(regex)].map(match => match[0]))]; // Remove duplicates
+        
+        if (matches.length === 0) {
+          linksContainer.innerHTML = `
+            <div class="text-center py-6">
+              <i class="fas fa-exclamation-triangle text-amber-400 text-3xl mb-3"></i>
+              <p class="text-gray-300">No video links found on this page.</p>
             </div>
           `;
-        });
+          showToast('No video links found', 'warning');
+          return;
+        }
+        
+        linksContainer.innerHTML = `
+          <div class="flex justify-between items-center mb-4">
+            <h4 class="font-medium text-indigo-300">
+              <i class="fas fa-link mr-2"></i> Found ${matches.length} video links
+            </h4>
+            <button 
+              onclick="copyAllLinks()" 
+              class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm flex items-center"
+            >
+              <i class="fas fa-copy mr-1"></i> Copy All
+            </button>
+          </div>
+          <div class="space-y-3">
+            ${matches.map((link, index) => `
+              <div class="link-item bg-gray-700/50 hover:bg-gray-700 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <input 
+                  type="text" 
+                  id="foundLink${index}" 
+                  value="${link}" 
+                  readonly 
+                  class="flex-1 px-3 py-2 bg-gray-800 rounded text-sm text-gray-300 font-mono overflow-x-auto"
+                >
+                <div class="flex gap-2">
+                  <button 
+                    onclick="copyToClipboard('foundLink${index}')" 
+                    class="px-3 py-1 bg-gray-600 hover:bg-indigo-600 rounded text-sm flex items-center"
+                  >
+                    <i class="fas fa-copy mr-1"></i> Copy
+                  </button>
+                  <button 
+                    onclick="document.getElementById('streamUrl').value='${link}'; switchTab('player'); playStream();" 
+                    class="px-3 py-1 bg-gray-600 hover:bg-amber-600 rounded text-sm flex items-center"
+                  >
+                    <i class="fas fa-play mr-1"></i> Play
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        
+        showToast(`Found ${matches.length} video links`, 'success');
       } catch (err) {
-        linksContainer.innerHTML = '<p style="color:red">Failed to extract links. Page may block access.</p>';
-        console.error(err);
+        console.error('Extraction error:', err);
+        linksContainer.innerHTML = `
+          <div class="text-center py-6">
+            <i class="fas fa-exclamation-circle text-red-400 text-3xl mb-3"></i>
+            <p class="text-gray-300">Failed to extract links. The page may block access.</p>
+            <p class="text-gray-500 text-sm mt-2">${err.message}</p>
+          </div>
+        `;
+        showToast('Failed to extract links', 'error');
+      } finally {
+        extractBtn.innerHTML = originalText;
+        extractBtn.disabled = false;
       }
     }
-
+    
+    // Enhanced ghPlayStream function
+    async function ghPlayStream() {
+      const video = document.getElementById('ghVideoPlayer');
+      const input = document.getElementById('ghUrlInput').value.trim();
+      
+      if (!input) {
+        showToast('Please enter a stream URL', 'error');
+        return;
+      }
+      
+      // Show loading state
+      const playBtn = document.querySelector(`[onclick="ghPlayStream()"]`);
+      const originalText = playBtn.innerHTML;
+      playBtn.innerHTML = '<i class="fas fa-spinner spinner mr-2"></i> Loading...';
+      playBtn.disabled = true;
+      
+      let url = input;
+      
+      // Reset player
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      
+      try {
+        // If it's a .txt file, fetch it
+        if (url.endsWith('.txt')) {
+          const response = await fetch(url);
+          url = (await response.text()).trim();
+        }
+        
+        // Use HLS.js for .m3u8
+        if (Hls.isSupported() && (url.endsWith('.m3u8') || url.includes('m3u8'))) {
+          const hls = new Hls({
+            maxBufferLength: 30,
+            maxMaxBufferLength: 600,
+            maxBufferSize: 60 * 1000 * 1000,
+            maxBufferHole: 0.5,
+          });
+          
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play();
+            showToast('Embed player started successfully', 'success');
+            playBtn.innerHTML = originalText;
+            playBtn.disabled = false;
+            
+            // Update embed code
+            const embedCode = document.querySelector('#embed code');
+            if (embedCode) {
+              embedCode.textContent = `<iframe src="${window.location.href.split('?')[0]}?movie=${encodeURIComponent(url)}" width="800" height="450" frameborder="0" allowfullscreen></iframe>`;
+            }
+          });
+          
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+              switch(data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  showToast('Network error - trying to recover...', 'error');
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  showToast('Media error - trying to recover...', 'error');
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  showToast('Fatal error - cannot recover', 'error');
+                  hls.destroy();
+                  playBtn.innerHTML = originalText;
+                  playBtn.disabled = false;
+              }
+            }
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS support (Safari)
+          video.src = url;
+          video.addEventListener('loadedmetadata', () => {
+            video.play();
+            showToast('Embed player started successfully', 'success');
+            playBtn.innerHTML = originalText;
+            playBtn.disabled = false;
+            
+            // Update embed code
+            const embedCode = document.querySelector('#embed code');
+            if (embedCode) {
+              embedCode.textContent = `<iframe src="${window.location.href.split('?')[0]}?movie=${encodeURIComponent(url)}" width="800" height="450" frameborder="0" allowfullscreen></iframe>`;
+            }
+          });
+        } else {
+          // Direct video source
+          video.src = url;
+          video.load();
+          
+          const playAttempt = setInterval(() => {
+            video.play()
+              .then(() => {
+                clearInterval(playAttempt);
+                showToast('Embed player started successfully', 'success');
+                playBtn.innerHTML = originalText;
+                playBtn.disabled = false;
+                
+                // Update embed code
+                const embedCode = document.querySelector('#embed code');
+                if (embedCode) {
+                  embedCode.textContent = `<iframe src="${window.location.href.split('?')[0]}?movie=${encodeURIComponent(url)}" width="800" height="450" frameborder="0" allowfullscreen></iframe>`;
+                }
+              })
+              .catch(error => {
+                if (error.name === 'NotAllowedError') {
+                  showToast('Please allow autoplay in your browser settings', 'error');
+                  clearInterval(playAttempt);
+                  playBtn.innerHTML = originalText;
+                  playBtn.disabled = false;
+                }
+              });
+          }, 500);
+        }
+      } catch (err) {
+        console.error('Playback error:', err);
+        showToast('Failed to load stream', 'error');
+        playBtn.innerHTML = originalText;
+        playBtn.disabled = false;
+      }
+    }
+    
+    // Helper functions
     function copyToClipboard(id) {
       const input = document.getElementById(id);
       input.select();
       input.setSelectionRange(0, 99999);
-      navigator.clipboard.writeText(input.value).then(() => {
-        alert("Copied to clipboard");
-      });
+      navigator.clipboard.writeText(input.value)
+        .then(() => showToast('Copied to clipboard', 'success'))
+        .catch(err => showToast('Failed to copy', 'error'));
     }
+    
+    function copyAllLinks() {
+      const links = [...document.querySelectorAll('#links input[type="text"]')].map(input => input.value).join('\n');
+      navigator.clipboard.writeText(links)
+        .then(() => showToast('All links copied to clipboard', 'success'))
+        .catch(err => showToast('Failed to copy links', 'error'));
+    }
+    
+    function switchTab(tabName) {
+      document.querySelector(`.tab-btn[data-tab="${tabName}"]`).click();
+    }
+    
+    function ghGetQueryParam(name) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+    
+    // Initialize on load
+    window.addEventListener('load', () => {
+      // Check for ?movie parameter in URL for embed player
+      const movie = ghGetQueryParam('movie');
+      if (movie) {
+        document.getElementById('ghUrlInput').value = movie;
+        switchTab('embed');
+        ghPlayStream();
+      }
+      
+      // Check for ?url parameter in URL for main player
+      const url = ghGetQueryParam('url');
+      if (url) {
+        document.getElementById('streamUrl').value = url;
+        switchTab('player');
+        playStream();
+      }
+    });
   </script>
 </body>
-  <!-- GitHub Dark Theme Embedded Player Section -->
-<hr style="margin:40px 0; border: 1px solid #ffcc00;">
-<h2>Embed-Ready Movie Player (GitHub Pages Compatible)</h2>
-<p>Use ?movie= URL parameter to auto-load streams.</p>
-<input id="ghUrlInput" type="text" placeholder="Paste .m3u8 or .mp4 link here or use ?movie=" style="width:80%; padding:10px; margin:10px 0;" />
-<button onclick="ghPlayStream()" style="padding:10px 20px; background:#ffcc00; color:black; border:none; border-radius:6px;">Play</button>
-<br/>
-<video id="ghVideoPlayer" controls autoplay style="margin-top:20px; width:90%; max-width:900px; background:black; border:3px solid #ffcc00; border-radius:12px;"></video>
-
-<script>
-  function ghGetQueryParam(name) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(name);
-  }
-
-  function ghPlayStream() {
-    const url = document.getElementById('ghUrlInput').value.trim();
-    const video = document.getElementById('ghVideoPlayer');
-    if (Hls.isSupported() && url.endsWith(".m3u8")) {
-      const hls = new Hls();
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        video.play();
-      });
-    } else {
-      video.src = url;
-      video.load();
-      video.play();
-    }
-  }
-
-  window.addEventListener("load", () => {
-    const movie = ghGetQueryParam("movie");
-    if (movie) {
-      document.getElementById("ghUrlInput").value = movie;
-      ghPlayStream();
-    }
-  });
-</script>
-  <script>
-  async function ghPlayStream() {
-    const video = document.getElementById('ghVideoPlayer');
-    const input = document.getElementById('ghUrlInput').value.trim();
-    let url = input;
-
-    // If it's a .txt file, fetch it
-    if (url.endsWith('.txt')) {
-      try {
-        const response = await fetch(url);
-        url = (await response.text()).trim();
-      } catch (err) {
-        alert("Failed to load .txt file");
-        return;
-      }
-    }
-
-    // Reset player
-    video.pause();
-    video.removeAttribute('src');
-    video.load();
-
-    // Use HLS.js for .m3u8
-    if (Hls.isSupported() && url.endsWith(".m3u8")) {
-      const hls = new Hls();
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        video.play();
-      });
-      hls.on(Hls.Events.ERROR, function (event, data) {
-        if (data.fatal) alert("HLS error: " + data.details);
-      });
-    } else {
-      // Fallback to native HTML5 for MP4 or supported formats
-      video.src = url;
-      video.addEventListener("loadedmetadata", () => video.play());
-      video.load();
-    }
-  }
-
-  function ghGetQueryParam(name) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(name);
-  }
-
-  window.addEventListener("load", () => {
-    const movie = ghGetQueryParam("movie");
-    if (movie) {
-      document.getElementById("ghUrlInput").value = movie;
-      ghPlayStream();
-    }
-  });
-</script>
-
-
 </html>

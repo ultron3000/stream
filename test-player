@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Multi Network Stream Player</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    body {
+      background: #121212;
+      color: #ffffff;
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #ffcc00;
+      margin-bottom: 30px;
+      font-size: 2.2rem;
+    }
+    h2 {
+      color: #ffcc00;
+      margin: 20px 0;
+    }
+    input {
+      width: 70%;
+      padding: 12px 5px;
+      font-size: 1rem;
+      border-radius: 8px 5px;
+      border: 1px solid #333;
+      background: #222;
+      color: white;
+      margin: 10px 0;
+      transition: all 0.3s ease;
+    }
+    input:focus {
+      outline: none;
+      border-color: #ffcc00;
+      box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.2);
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin: 10px;
+      border-radius: 8px;
+      border: none;
+      background-color: #ffcc00;
+      color: #121212;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      background-color: #ffd633;
+      transform: translateY(-2px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    video {
+      width: 100%;
+      max-width: 900px;
+      height: auto;
+      background: #000;
+      border: 3px solid #333;
+      border-radius: 12px;
+      margin: 30px auto;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+    .link-item {
+      margin: 15px 0;
+      padding: 15px;
+      background: #1e1e1e;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .tab-btn:hover {
+      background: #444;
+      color: #fff;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 30px;
+      gap: 10px;
+    }
+    .tab-btn {
+      padding: 12px 25px;
+      border: none;
+      background: #333;
+      color: #aaa;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .tab-btn.active {
+      background: #ffcc00;
+      color: #121212;
+    }
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    code {
+      background: #333;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #ffcc00;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Multi Network Stream Player</h1>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('standard')">Standard Player</button>
+    <button class="tab-btn" onclick="switchTab('github')">GitHub Embed Player</button>
+  </div>
+
+  <!-- Standard Player -->
+  <div id="standard" class="tab-content active">
+    <h2>Standard Stream Player</h2>
+    <input type="text" id="streamUrl" placeholder="Paste stream link (.txt, .m3u8, .mp4)" />
+    <button onclick="playStream()">Play</button>
+    <br><br>
+    <input type="text" id="pageUrl" placeholder="Paste webpage URL to extract video links" />
+    <button onclick="extractLinks()">Extract</button>
+
+    <video id="videoPlayer" controls autoplay crossorigin="anonymous"></video>
+    <div id="links"></div>
+  </div>
+
+  <!-- GitHub Player -->
+  <div id="github" class="tab-content">
+    <h2>GitHub Embed-Ready Player</h2>
+    <p>Use <code>?movie=</code> parameter in URL to auto-load stream</p>
+    <input id="ghUrlInput" type="text" placeholder="Paste .m3u8 / .mp4 / .txt link" />
+    <button onclick="ghPlayStream()">Play</button>
+
+    <video id="ghVideoPlayer" controls autoplay></video>
+  </div>
+
+  <script>
+    // Tab switcher
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    // Standard Player
+    function playStream(urlInputId = 'streamUrl') {
+      const video = document.getElementById('videoPlayer');
+      const url = document.getElementById(urlInputId).value.trim();
+
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+
+      if (url.endsWith('.txt')) {
+        fetch(url)
+          .then(response => response.text())
+          .then(realUrl => {
+            playStreamFromUrl(realUrl.trim(), video);
+          })
+          .catch(() => alert("Failed to load .txt file"));
+      } else {
+        playStreamFromUrl(url, video);
+      }
+    }
+
+    function playStreamFromUrl(url, video) {
+      if (Hls.isSupported() && url.endsWith(".m3u8")) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) alert("HLS error: " + data.details);
+        });
+      } else {
+        video.src = url;
+        video.addEventListener("loadedmetadata", () => video.play());
+        video.load();
+      }
+    }
+
+    async function extractLinks() {
+      const pageUrl = document.getElementById('pageUrl').value.trim();
+      const linksContainer = document.getElementById('links');
+      linksContainer.innerHTML = '<p style="color:white">Loading...</p>';
+
+      try {
+        const response = await fetch(`https://stream-production-e59c.up.railway.app/extract?url=${encodeURIComponent(pageUrl)}`);
+        const html = await response.text();
+        const regex = /https?:[^"'\s>]+\.(m3u8|mp4)(\?[^"'\s>]*)?/gi;
+        const matches = [...html.matchAll(regex)];
+
+        if (matches.length === 0) {
+          linksContainer.innerHTML = '<p style="color:red">No video links found.</p>';
+          return;
+        }
+
+        linksContainer.innerHTML = '<h3>Found Links:</h3>';
+        matches.forEach((match, index) => {
+          const link = match[0];
+          const id = `foundLink${index}`;
+          linksContainer.innerHTML += `
+            <div class="link-item">
+              <input type="text" id="${id}" value="${link}" readonly>
+              <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center;">
+                <button onclick="copyToClipboard('${id}')">Copy Link</button>
+                <button onclick="document.getElementById('streamUrl').value='${link}'; playStream();">Play in Standard</button>
+                <button onclick="document.getElementById('ghUrlInput').value='${link}'; switchTab('github'); ghPlayStream();">Play in GitHub</button>
+              </div>
+            </div>
+          `;
+        });
+      } catch (err) {
+        linksContainer.innerHTML = '<p style="color:red">Failed to extract links. Page may block access.</p>';
+        console.error(err);
+      }
+    }
+
+    function copyToClipboard(id) {
+      const input = document.getElementById(id);
+      input.select();
+      input.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(input.value).then(() => alert("Copied to clipboard"));
+    }
+
+    // GitHub Player
+    async function ghPlayStream() {
+      const video = document.getElementById('ghVideoPlayer');
+      let url = document.getElementById('ghUrlInput').value.trim();
+
+      if (url.endsWith('.txt')) {
+        try {
+          const response = await fetch(url);
+          url = (await response.text()).trim();
+        } catch {
+          alert("Failed to load .txt file");
+          return;
+        }
+      }
+
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+
+      if (Hls.isSupported() && url.endsWith(".m3u8")) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) alert("HLS error: " + data.details);
+        });
+      } else {
+        video.src = url;
+        video.addEventListener("loadedmetadata", () => video.play());
+        video.load();
+      }
+    }
+
+    function ghGetQueryParam(name) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+
+    window.addEventListener("load", () => {
+      const movie = ghGetQueryParam("movie");
+      if (movie) {
+        document.getElementById("ghUrlInput").value = movie;
+        switchTab('github');
+        ghPlayStream();
+      }
+    });
+  </script>
+  </div>
+</body>
+</html>
